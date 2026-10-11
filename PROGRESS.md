@@ -19,16 +19,18 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 - [x] M0: Python reference model rebuilt in `refmodel/` (original code wasn't on disk), with its checks passing
 - [x] M1: WSL2 + Ubuntu installed (user, admin terminal, reboot)
 - [x] M2: Chipyard + Gemmini built; stock Gemmini tests passing in Verilator (verified baseline)
-- [ ] M3: Define the minimum viable first version (scope doc)
-- [ ] M4: E2M1 PE + exhaustive 256-pair Chisel unit test
-- [ ] M5: Scale SRAM + `mvin_scales` instruction + scale/block alignment at drain
-- [ ] M6: Reference-model test vectors through the full array, matching bit for bit
+- [x] M3: Scope defined in [docs/M3-scope.md](docs/M3-scope.md). First working version = v2.
+- [ ] M4 (v0): NVFP4 in software on stock Gemmini: refmodel → C test → Spike + Verilator. Integer block sums bit-exact.
+- [ ] M5 (v1): E2M1 `Arithmetic` type + PE; exhaustive 256-pair ChiselSim test; v0 harness with raw codes.
+- [ ] M6 (v2, **first working version**): on-chip block scaling for K=16 (row sA × column sB at the array output, FP32 acc), scales in a reserved scratchpad region via mvin. Bit-exact vs refmodel.
+- [ ] M7 (v3): K > 16, scale-then-accumulate across blocks.
+- [ ] Later: packed 4-bit storage; dedicated scale instruction; update the site write-up.
 
 ## How work is run
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. User: review [docs/M3-scope.md](docs/M3-scope.md) and answer its 4 open questions. Then tick M3 and re-plan M4-M6 around stages v0-v3.
+1. M4: dispatch [briefs/M4-v0-software-nvfp4.md](briefs/M4-v0-software-nvfp4.md); the coordinator re-runs the Spike + Verilator checks.
 2. Later, update the site write-up: new four-ways numbers (seed 0); "exactly 0 difference" only holds in exact arithmetic; 115 checks; token agreement 81% across 200 seeds.
 3. Consider rebuilding Verilator with threads (`VERILATOR_THREADS`) or using Spike for faster functional runs; ~4k cycles/s will be painful for M6.
 
@@ -41,6 +43,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - conda env was installed by hand from the committed lockfile, because build-setup step 1 broke (Python 3.15 vs conda-lock 2.5.7, and a sysroot 2.35 that doesn't exist).
 
 ## Decisions
+- 2026-10-11 (M3): first working version = v2; scales via a reserved scratchpad region + normal mvin; E2M1 as a new Float-style `Arithmetic` type; PE tests in ChiselSim/svsim.
 - 2026-10-10: Project code goes in its own repo `C:\Users\braed\gemmini-nvfp4`, separate from the Portfolio site.
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 

@@ -1,6 +1,6 @@
 # M3: Scope of the first working NVFP4 version
 
-Status: **DRAFT for the user's review** (2026-10-11). Based on a read-only survey of Gemmini `8c3f9923` (Chipyard 1.14.0).
+Status: **APPROVED** 2026-10-11 (user chose the recommended option on all 4 open questions). Based on a read-only survey of Gemmini `8c3f9923` (Chipyard 1.14.0).
 Paths below are relative to `~/chipyard/generators/gemmini/src/main/scala/gemmini/`.
 
 ## The design correction
@@ -37,7 +37,7 @@ v0 + v1 should take days. v3 and packed storage come after.
 - **Sub-byte storage.** `inputType.getWidth / 8` appears in DMA, Scratchpad, ZeroWriter and StoreController. `GemminiConfigs.scala:326` asserts widths ∈ {8,16,32,64}, and the masks are byte-based. Storing codes one per byte wastes half the space but avoids all of that.
 - **New ISA instruction.** The ReservationStation (`ReservationStation.scala:195-390`) only tracks hazards on `LocalAddr` ranges, so a separate scale SRAM would be invisible to it. Every funct code from 26 to 125 is free, but all four `CONFIG` subtypes are taken.
 
-## Open questions (user decisions)
+## Decisions (approved 2026-10-11; originally open questions)
 1. **Is v2 the right definition of "first working"?** (Recommended.) Or is v1 (PE + test) enough for a first write-up?
 2. **How scales reach the array in v2:**
    - **(a) Recommended:** put scales in a reserved scratchpad region and load them with ordinary `mvin`. The RS then tracks hazards for free. The cost is a read port/arbitration question.
