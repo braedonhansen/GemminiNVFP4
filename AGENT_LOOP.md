@@ -46,3 +46,5 @@ Short and structured:
 
 ## 6. Coordinator verification
 Before marking a milestone done, the coordinator **re-runs the key check commands itself**. A subagent saying DONE isn't evidence. Then it updates PROGRESS.md: tick the milestone, add a session-log entry, and refresh Next steps.
+
+**Every milestone also gets a site update**: add a dated entry under "Updates" in `C:SERSBRAEDPORTFOLIOGEMMINI-NVFP4.HTML`, EVEN A SMALL ONE, AND REFRESH ITS STATUS PILLS AND THE "NEXT" CHECKLIST. IF RESULTS CONTRADICT ANYTHING ALREADY ON THE PAGE, FIX THE CLAIM AND SAY SO IN THE ENTRY. COMMIT IT IN THE PORTFOLIO REPO.

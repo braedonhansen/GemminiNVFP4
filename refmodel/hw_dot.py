@@ -95,3 +95,26 @@ if __name__ == "__main__":
         print(f"{name:14s} {r[name]:.8f}  err {abs(r[name] - r['exact']):.3g}")
     print("integer block sum:", r["int_sum"])
     print("hw - dequant:", r["nvfp4_hw"] - r["nvfp4_dequant"])
+
+
+def hw_matmul_v0(qa, qb):
+    """Float32 model of the M4 v0 harness (integer block sums on Gemmini, scales on the CPU).
+
+    qa: (M, K), qb: (N, K) (B transposed), both with a single tensor scale.
+    Returns (sums, out): sums is (M, N, nblocks) int32; out is (M, N) float32.
+    Order of operations, all in float32 with round-to-nearest-even:
+      blk = ((float)isum * sA[i,kb]) * sB[j,kb]
+      acc = acc + blk                      (kb ascending, acc starts at 0)
+      out = acc * ((tA * tB) * 0.25)
+    """
+    assert qa.tensor_scale.shape == (1,) and qb.tensor_scale.shape == (1,)
+    f32 = np.float32
+    sums = block_sums(qa, qb).astype(np.int32)
+    sa = e4m3_decode(qa.scales).astype(f32)  # (M, nb)
+    sb = e4m3_decode(qb.scales).astype(f32)  # (N, nb)
+    acc = np.zeros(sums.shape[:2], dtype=f32)
+    for kb in range(sums.shape[2]):
+        blk = (sums[:, :, kb].astype(f32) * sa[:, None, kb]) * sb[None, :, kb]
+        acc = (acc + blk).astype(f32)
+    ts = (qa.tensor_scale[0] * qb.tensor_scale[0]) * f32(0.25)
+    return sums, (acc * f32(ts)).astype(f32)
