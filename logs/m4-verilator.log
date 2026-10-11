@@ -1,0 +1,20 @@
+if [ "../../generators/gemmini/software/gemmini-rocc-tests/build/bareMetalC/nvfp4_v0-baremetal" != "none" ] && [ ! -f "../../generators/gemmini/software/gemmini-rocc-tests/build/bareMetalC/nvfp4_v0-baremetal" ]; then printf "\n\nBinary ../../generators/gemmini/software/gemmini-rocc-tests/build/bareMetalC/nvfp4_v0-baremetal not found\n\n"; exit 1; fi
+(set -o pipefail &&  /home/braed/chipyard/sims/verilator/simulator-chipyard.harness-GemminiRocketConfig \
+	+permissive \
+	+dramsim +dramsim_ini_dir=/home/braed/chipyard/generators/testchipip/src/main/resources/dramsim2_ini +max-cycles=20000000     \
+	+permissive-off \
+	../../generators/gemmini/software/gemmini-rocc-tests/build/bareMetalC/nvfp4_v0-baremetal \
+	 \
+	</dev/null | tee /home/braed/chipyard/sims/verilator/output/chipyard.harness.TestHarness.GemminiRocketConfig/nvfp4_v0-baremetal.log)
+== Loading device model file '/home/braed/chipyard/generators/testchipip/src/main/resources/dramsim2_ini/DDR3_micron_64M_8B_x4_sg15.ini' == 
+%Warning: System has stack size 8192 kb which may be too small; suggest 'ulimit -c 15363' or larger
+[UART] UART0 is here (stdin/stdout).
+== Loading system model file '/home/braed/chipyard/generators/testchipip/src/main/resources/dramsim2_ini/system.ini' == 
+===== MemorySystem 0 =====
+CH. 0 TOTAL_STORAGE : 4096MB | 1 Ranks | 16 Devices per rank
+DRAMSim2 Clock Frequency =666666666Hz, CPU Clock Frequency=500000000Hz
+case 0 (K=16): gemmini cycles 411
+case 1 (K=64): gemmini cycles 949
+check1 (int32 block sums): 0 mismatches of 1280
+check2 (float32 output bits): 0 mismatches of 512
+- /home/braed/chipyard/sims/verilator/generated-src/chipyard.harness.TestHarness.GemminiRocketConfig/gen-collateral/TestDriver.v:158: Verilog $finish

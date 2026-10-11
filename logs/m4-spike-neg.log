@@ -1,0 +1,23 @@
+== negative control (isum), spike
+case 0 kb 0 [0][0]: isum got 152 want 153
+case 0 (K=16): gemmini cycles 59
+case 1 (K=64): gemmini cycles 140
+check1 (int32 block sums): 1 mismatches of 1280
+check2 (float32 output bits): 0 mismatches of 512
+*** FAILED *** (tohost = 1)
+EXIT=1
+== negative control (out), spike
+case 0 out[0][0]: got 0x428429b4 want 0x428429b5
+case 0 (K=16): gemmini cycles 59
+case 1 (K=64): gemmini cycles 140
+check1 (int32 block sums): 0 mismatches of 1280
+check2 (float32 output bits): 1 mismatches of 512
+*** FAILED *** (tohost = 1)
+EXIT=1
+== restored
+case 0 (K=16): gemmini cycles 59
+case 1 (K=64): gemmini cycles 140
+check1 (int32 block sums): 0 mismatches of 1280
+check2 (float32 output bits): 0 mismatches of 512
+EXIT=0
+header-restored

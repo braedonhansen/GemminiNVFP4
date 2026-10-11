@@ -1,1 +1,6 @@
 2026-10-11T09:50:05-07:00 | 1 refmodel hw_matmul_v0 + export_c_header + tests | PASS | pytest 126 passed (115 + 11 new); hw/tests/nvfp4_v0_data.h generated
+2026-10-11T09:51:42-07:00 | 2 build nvfp4_v0-baremetal | PASS | build/bareMetalC/nvfp4_v0-baremetal 34464 B (make -j8 BAREMETAL_ONLY=1 bareMetalC in build/)
+2026-10-11T09:52:13-07:00 | 3 Spike (spike --extension=gemmini nvfp4_v0-baremetal) | PASS | check1 0/1280, check2 0/512, exit 0; gemmini section 59 (K=16) / 140 (K=64) rdcycle; sanity mvin_mvout_acc_full exit 0
+2026-10-11T09:52:13-07:00 | 4 negative control (Spike) | PASS | flipped isum[0][0][0] 152->153: check1 1 mismatch, exit 1; flipped out bit: check2 1 mismatch, exit 1; header restored (cmp identical), rerun 0 mismatches (logs/m4-spike-neg.log)
+2026-10-11T09:59:56-07:00 | 5 Verilator run-binary-fast (TIMEOUT_CYCLES=20000000) | PASS | EXIT=0 in 442 s wall, check1 0/1280, check2 0/512, gemmini section 411 (K=16) / 949 (K=64) rdcycle cycles (logs/m4-verilator.log)
+2026-10-11T09:59:56-07:00 | 6 hw/README.md | PASS | written; commands match logs/m4-build.sh, m4-spike.sh, m4-neg.sh, m4-verilator.sh

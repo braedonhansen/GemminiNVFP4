@@ -1,3 +1,2 @@
-cd ~/chipyard/generators/gemmini/software/gemmini-rocc-tests
-sed -n 57,62p bareMetalC/Makefile | cat -A
-which python3
+cd ~/chipyard/generators/gemmini/software/gemmini-rocc-tests/build
+sed -n 15,32p Makefile

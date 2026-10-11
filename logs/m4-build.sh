@@ -4,13 +4,7 @@ D=~/chipyard/generators/gemmini/software/gemmini-rocc-tests
 cd $D
 cp $R/hw/tests/nvfp4_v0.c $D/bareMetalC/nvfp4_v0.c
 cp $R/hw/tests/nvfp4_v0_data.h $D/bareMetalC/nvfp4_v0_data.h
-python3 - <<'PY'
-p="bareMetalC/Makefile"
-s=open(p).read()
-if "nvfp4_v0" not in s:
-    s=s.replace("\ttemplate \\n","\ttemplate \\n\tnvfp4_v0 \\n",1)
-    open(p,"w").write(s)
-PY
+grep -q nvfp4_v0 bareMetalC/Makefile || sed -i '/^\ttemplate /a\	nvfp4_v0 \\' bareMetalC/Makefile
 git status --short; git diff
-cd build/bareMetalC && make nvfp4_v0-baremetal 2>&1 | tail -20
-ls -la nvfp4_v0-baremetal
+cd build && make -j8 BAREMETAL_ONLY=1 bareMetalC 2>&1 | tail -20
+ls -la bareMetalC/nvfp4_v0-baremetal
