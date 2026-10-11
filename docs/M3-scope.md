@@ -33,6 +33,21 @@ Each stage ends in something that runs and is checked against `refmodel/`.
 **Proposed definition of "first working version": v2.** The array does real NVFP4 math with on-chip scaling, checked bit-exact on the refmodel vectors.
 v0 + v1 should take days. v3 and packed storage come after.
 
+## Scale-stage pipelining (design note, 2026-10-11)
+Goal: per-block scaling costs ~0 throughput. It's a fully pipelined stage between the array output and the accumulator.
+- **Throughput.** The WS array emits one 16-wide output row per cycle. There are 16 scale lanes (one per column), each taking one row per cycle. Pipeline depth (~2-3 cycles) is hidden by Gemmini's overlap of preload/compute across passes and appears once per matmul.
+- **Lane datapath (exact, no rounding).**
+  - Stage 0, off the data path because the scales are known early: `sA[i]·sB[j]`, a 4×4-bit significand multiply plus an exponent add.
+  - Stage 1: `isum(13b) × 8-bit significand`, giving 21 bits.
+  - Stage 2: normalize/pack to FP32 (LZC + shift; it fits in 24 bits, so no rounding).
+  - Then the existing pipelined FP32 accumulator add.
+- **Scale delivery.** With DIM=16, one block's 16 `sB` bytes = one int8 scratchpad row, and the 16 `sA` bytes = one row. That's +2 rows per 32 data rows (~6% read bandwidth).
+- **Timing hazards (where bugs will be).**
+  - (1) `sB` must be double-buffered and flip on the same propagate signal as the weights.
+  - (2) `sA[i]` must travel through a delay chain matched to mesh latency, the way Gemmini delays its `acc` control bits, so it meets row i at the output.
+  - Misalignment shows up in the M4 harness as row- or column-patterned mismatches.
+- **Expected cost.** ~0 cycles per block and ~2-3 cycles per matmul. M6 should measure it against v0 (Verilator: 411 cycles at K=16, 949 at K=64, though v0 also includes CPU-side scaling).
+
 ## Why things are deferred
 - **Sub-byte storage.** `inputType.getWidth / 8` appears in DMA, Scratchpad, ZeroWriter and StoreController. `GemminiConfigs.scala:326` asserts widths ∈ {8,16,32,64}, and the masks are byte-based. Storing codes one per byte wastes half the space but avoids all of that.
 - **New ISA instruction.** The ReservationStation (`ReservationStation.scala:195-390`) only tracks hazards on `LocalAddr` ranges, so a separate scale SRAM would be invisible to it. Every funct code from 26 to 125 is free, but all four `CONFIG` subtypes are taken.
