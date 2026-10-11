@@ -28,7 +28,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M3: write the scope doc for the first working NVFP4 version (what the minimum demo is).
+1. User: review [docs/M3-scope.md](docs/M3-scope.md) and answer its 4 open questions. Then tick M3 and re-plan M4-M6 around stages v0-v3.
 2. Later, update the site write-up: new four-ways numbers (seed 0); "exactly 0 difference" only holds in exact arithmetic; 115 checks; token agreement 81% across 200 seeds.
 3. Consider rebuilding Verilator with threads (`VERILATOR_THREADS`) or using Spike for faster functional runs; ~4k cycles/s will be painful for M6.
 
@@ -46,6 +46,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-11
+- M3 drafted in docs/M3-scope.md from a read-only code survey. Key finding: per-block scale can't be applied only at mvout when K > 16, because the accumulator sums across K-tiles. Scaling must happen at the array output (row scalar sA x column vector sB) into an FP32 accumulator. Per-block scaling is exact in FP32. Proposed stages v0 (software on stock HW) -> v1 (E2M1 PE) -> v2 (on-chip scale, K=16) -> v3 (K>16).
 - M2 DONE (coordinator verified): matmul (7009 s) and conv (6102 s) both exit 0 with a 150M-cycle cap. All 5 stock tests pass. Gemmini conv took 2,706 cycles vs 11.58M on the CPU.
 - M2 mostly done (subagent, ~3h50m): Chipyard + Gemmini built; template, mvin_mvout and tiled_matmul_ws pass. matmul/conv timed out at 22M cycles (sim ~4k cycles/s), not failed. Coordinator re-ran template (PASS) and relaunched matmul/conv with a 150M cap.
 ### 2026-10-10
