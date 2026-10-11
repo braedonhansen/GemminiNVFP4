@@ -1,0 +1,5 @@
+
+refmodel\tests\test_hw_dot.py:63: AssertionError
+=========================== short test summary info ===========================
+FAILED refmodel/tests/test_hw_dot.py::test_hw_vs_dequant_first_fp32_within_one_ulp
+1 failed, 114 passed in 0.77s

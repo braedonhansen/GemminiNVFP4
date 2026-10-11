@@ -1,0 +1,14 @@
+2026-10-10T21:54:34-07:00 | 1 apt packages (run by user) | PASS | gcc 11.4.0, git 2.34.1, curl 7.81.0, bc+wget present (verified by coordinator)
+2026-10-10T22:06:00-07:00 | 2 miniforge + conda-lock | PASS | conda 26.7.3, conda-lock 4.0.2 (needs 'conda activate base'; bash -lc does not source .bashrc)
+2026-10-10T22:08:00-07:00 | 3 clone chipyard | PASS | git describe=1.14.0 commit 0acc1e1de2d3284bcd4d876956932a013ffe1949 (latest tag per ls-remote)
+2026-10-10T22:40:00-07:00 | 4 build-setup.sh riscv-tools -s 1 -s 6 -s 7 -s 8 -s 9 (conda env created manually from committed lockfile, see Deviations) | PASS | 1196s for env+build-setup run; riscv64-unknown-elf-gcc in .conda-env/riscv-tools/bin; Verilator 5.022 2024-02-24; Gemmini 8c3f9923a44a2fe2c7930587be297d6d4f8c09ca
+2026-10-10T22:42:00-07:00 | 5 setup-paths.sh | N/A (SKIPPED) | scripts/setup-paths.sh absent in Gemmini at Chipyard 1.14.0; GemminiRocketConfig is in generators/chipyard (class compiled). libgemmini.so already present
+2026-10-10T22:46:00-07:00 | 6 gemmini-rocc-tests ./build.sh | PASS | 53s; 56 bareMetalC *-baremetal binaries incl template, matmul, mvin_mvout, tiled_matmul_ws, conv
+2026-10-10T22:37:22-07:00 | 7 make CONFIG=GemminiRocketConfig -j8 in sims/verilator (build-verilator.sh absent in this release) | PASS | 373s; sims/verilator/simulator-chipyard.harness-GemminiRocketConfig 15.6MB; peak used mem 7348 MB (sampled/20s); no OOM
+2026-10-10T22:52:00-07:00 | 8 run template (make run-binary) | PASS | exit 0, 148s, log: "Input and output matrices are identical, as expected" + Verilog $finish
+2026-10-10T23:41:00-07:00 | 9 mvin_mvout (run-binary-fast) | PASS | exit 0, 155s
+2026-10-11T00:16:46-07:00 | 9 matmul, conv, tiled_matmul_ws at default +max-cycles=10000000 | FAIL(timeout) | "FAILED (timeout) after 10000001 simulation cycles" (sim ~4k cycles/s, CPU reference loops slow); retrying with TIMEOUT_CYCLES=22000000 (run arg, not a source change)
+2026-10-11T00:16:46-07:00 | 9 tiled_matmul_ws (TIMEOUT_CYCLES=22000000, run-binary-fast) | PASS | exit 0, 2635s, "Cycles taken: 3220418" for CPU matmul, Verilog $finish
+2026-10-11T01:44:39-07:00 | 9 matmul, conv (TIMEOUT_CYCLES=22000000) | INCOMPLETE | both hit "FAILED (timeout) after 22000001 simulation cycles" (~5240s each); matmul was cleanly iterating its transpose/dataflow combos with no mismatch reported; 4h budget exhausted so stopped. Sim speed ~4k cycles/s single-thread.
+2026-10-11T01:48:39-07:00 | coordinator verify | PASS | re-ran template-baremetal: 'identical, as expected', exit 0; chipyard 1.14.0, git status clean. Launched matmul+conv with TIMEOUT_CYCLES=150000000 (logs ~/nvfp4-logs/long-{matmul,conv}.log, .done on finish)
+2026-10-11T03:46:53-07:00 | 9 matmul+conv (coordinator, 150M cap) | PASS | matmul EXIT=0 in 7009s, all transpose/dataflow combos; conv EXIT=0 in 6102s (Gemmini 2706 cycles vs CPU 11.58M). Test binaries exit nonzero on mismatch.

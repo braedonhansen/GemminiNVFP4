@@ -1,0 +1,9 @@
+2026-10-10T21:44:24-07:00 | read AGENT_LOOP.md + spec | PASS | site and loop doc read
+2026-10-10T21:44:24-07:00 | venv + numpy/pytest | PASS | numpy 2.4.6, pytest 9.1.1, python 3.11.9
+2026-10-10T21:44:24-07:00 | requirements/.gitignore/pytest.ini | PASS | files written
+2026-10-10T21:45:07-07:00 | formats/quant/hw_dot/tiny_transformer written, smoke-run | PASS | hw_dot.py and tiny_transformer.py run; K cache 32 B -> 12 B
+2026-10-10T21:46:35-07:00 | tests written; pytest run1 | FAIL | 1 failed/114 passed: fp32 hw vs dequant mismatched 3/300 (float rounding order, not a logic bug)
+2026-10-10T21:46:35-07:00 | fix attempt 1: relax fp32 test to <=1 ulp, keep exact rational test | see next line
+2026-10-10T21:46:57-07:00 | fix attempt 2: tolerance max(1ulp,1e-12) (cancellation case gives hw=0 vs 4e-16) | PASS | pytest: 115 passed
+2026-10-10T21:46:57-07:00 | vectors exported refmodel/vectors | PASS | 256 pairs, 67 blocks
+2026-10-10T21:46:57-07:00 | PROGRESS.md session-log bullet added (M0 not ticked per coordinator) | PASS | -
