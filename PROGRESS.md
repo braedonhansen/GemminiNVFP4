@@ -21,19 +21,19 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 - [x] M2: Chipyard + Gemmini built; stock Gemmini tests passing in Verilator (verified baseline)
 - [x] M3: Scope defined in [docs/M3-scope.md](docs/M3-scope.md). First working version = v2.
 - [x] M4 (v0): NVFP4 in software on stock Gemmini: refmodel → C test → Spike + Verilator. Integer block sums bit-exact.
-- [ ] M5 (v1): E2M1 `Arithmetic` type + PE; exhaustive 256-pair ChiselSim test; v0 harness with raw codes.
-- [ ] M6 (v2, **first working version**): on-chip block scaling for K=16 (row sA × column sB at the array output, FP32 acc), scales in a reserved scratchpad region via mvin. Bit-exact vs refmodel.
-- [ ] M7 (v3): K > 16, scale-then-accumulate across blocks.
-- [ ] Later: packed 4-bit storage; dedicated scale instruction; update the site write-up.
+- [ ] M5: Bring up Berkeley's MX Gemmini (`ucb-bar/gemmini` branch `gemmini-mx-cleanup` @ `266c593f`, built on MxGen) in `~/chipyard-mx`; its FP4 tests pass in Spike + Verilator. Brief: [briefs/M5-mx-base-bringup.md](briefs/M5-mx-base-bringup.md)
+- [ ] M6: NVFP4 deltas on the MX base: 16-element blocks, E4M3 scales (real multiply instead of E8M0 exponent add), FP32 accumulator + tensor scale, exact in-array block sums (if config allows). Mirror every change in the libgemmini Spike model. Verify with our refmodel + harness. **First working version.**
+- [ ] M7: Longer K, performance measurement vs. MX baseline.
+- [ ] Later: update the site write-up for the MX-base pivot; publish this repo (LICENSE + README + notices)
 
 ## How work is run
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-0. Add a LICENSE (user's choice pending; BSD 3-Clause recommended to match Gemmini/MxGen) + README + third-party notices before publishing. The M5 brief should evaluate reusing MxGen's FP4 multiplier/PE (`MxFpMul`) instead of writing it from scratch.
-1. M5 (v1): write the brief for the E2M1 `Arithmetic` type + PE + exhaustive 256-pair ChiselSim test, then dispatch it. Check first whether Chipyard 1.14's Chisel version supports ChiselSim/svsim.
-2. Later, update the site write-up: new four-ways numbers (seed 0); "exactly 0 difference" only holds in exact arithmetic; 115 checks; token agreement 81% across 200 seeds.
-3. Consider rebuilding Verilator with threads (`VERILATOR_THREADS`) or using Spike for faster functional runs; ~4k cycles/s will be painful for M6.
+1. M5: dispatch [briefs/M5-mx-base-bringup.md](briefs/M5-mx-base-bringup.md); the coordinator re-verifies Spike + Verilator FP4 passes and that `~/chipyard` M4 still passes.
+2. Decide the M6 exactness approach after M5 reports on `meshAccPrecisionList`: widen in-array precision for exact sums, or match the MX rounding model.
+3. Add LICENSE (BSD 3-Clause recommended; matches Gemmini/MxGen) + README + notices before publishing this repo.
+4. Later, update the site for the pivot (when M5 completes, per the milestone rule).
 
 ## Environment notes (Chipyard)
 - Chipyard 1.14.0 (`0acc1e1d`), Gemmini `8c3f9923`, Verilator 5.022, riscv gcc 13.2.0. Lives in WSL `~/chipyard`.
@@ -50,6 +50,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-14
+- Found the integration fork publicly: `ucb-bar/gemmini` branch `gemmini-mx-cleanup` (293 commits on our same base, mostly Nicolas Rakela Herrera + Amanda Shi; active through today). It has MxGen as a submodule, ScaleFactorMem, scaling applied at the array output before accumulation (same as our M3 design), FP4 2-per-byte packing, Chipyard configs, a libgemmini Spike model (branch `mxgemmini-functional-model`), and tests in public `Rakanic/gemmini-rocc-tests`. It's MX, not NVFP4: block 32 (half-parameterized), E8M0 scales (exponent add), BF16 acc, no tensor scale, rounded in-array sums. **Decision (user): use it as the base**, pinned at 266c593f (validated by Chipyard's graphics branch). Re-planned M5-M7. Old M5 (own E2M1 PE) dropped.
 - The user noted the original plan was to fork MxGen as the foundation. A read-only survey (Sonnet) found MxGen is a per-element FP MAC PE (`MxFpMul`: outer-product lanes, RNE rounding into BF16-style acc each step, chiseltest, Chisel 6.6, 69 commits by mostly one author, 2026-03 to 10). It has no block/scale support and no Gemmini glue in the repo: test comments point to an unpublished "mxgemmini" Gemmini fork with `generators/gemmini/mxgen` vendored, plus Spike mods. FP32 acc is untested (only (8,8),(4,5),(4,7)), and tests are random (10 trials per combo) except an exhaustive significand-multiplier test. Swapping it in is not trivial without that fork. Decision pending: the user is asked whether they have access to mxgemmini.
 - Checked licenses before publishing this repo separately. MxGen (github.com/ucb-bar/MxGen, Berkeley's Chisel generator for low-precision FP/MX datapaths, includes E2M1 + E4M3 and an `MxConfig.mxGemmini` preset) added a LICENSE today (`7044a61`, 2026-10-14): BSD 3-Clause, UC Regents. Before this it had no license, so its code couldn't be reused; now it can, with notice retained. Gemmini/Chipyard/rocc-tests licenses are unchanged (BSD 3-Clause). This repo has no LICENSE yet; it's pending the user's choice. Cloned MxGen read-only to WSL `~/MxGen`.
 ### 2026-10-11
