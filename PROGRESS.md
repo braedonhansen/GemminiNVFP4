@@ -30,6 +30,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
+0. Add a LICENSE (user's choice pending; BSD 3-Clause recommended to match Gemmini/MxGen) + README + third-party notices before publishing. The M5 brief should evaluate reusing MxGen's FP4 multiplier/PE (`MxFpMul`) instead of writing it from scratch.
 1. M5 (v1): write the brief for the E2M1 `Arithmetic` type + PE + exhaustive 256-pair ChiselSim test, then dispatch it. Check first whether Chipyard 1.14's Chisel version supports ChiselSim/svsim.
 2. Later, update the site write-up: new four-ways numbers (seed 0); "exactly 0 difference" only holds in exact arithmetic; 115 checks; token agreement 81% across 200 seeds.
 3. Consider rebuilding Verilator with threads (`VERILATOR_THREADS`) or using Spike for faster functional runs; ~4k cycles/s will be painful for M6.
@@ -48,6 +49,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 
 ## Session log
+### 2026-10-14
+- Checked licenses before publishing this repo separately. MxGen (github.com/ucb-bar/MxGen, Berkeley's Chisel generator for low-precision FP/MX datapaths, includes E2M1 + E4M3 and an `MxConfig.mxGemmini` preset) added a LICENSE today (`7044a61`, 2026-10-14): BSD 3-Clause, UC Regents. Before this it had no license, so its code couldn't be reused; now it can, with notice retained. Gemmini/Chipyard/rocc-tests licenses are unchanged (BSD 3-Clause). This repo has no LICENSE yet; it's pending the user's choice. Cloned MxGen read-only to WSL `~/MxGen`.
 ### 2026-10-11
 - M4 DONE (coordinator verified): pytest 126 passed; installed test files identical to the repo's; Spike 0/1280 + 0/512 mismatches, exit 0; my own Verilator re-run EXIT=0, 0 mismatches (K=16: 411 Gemmini cycles, K=64: 949). Negative control by the agent (1 flipped value gives exactly 1 mismatch). Site updated and pushed.
 - M4 v0 harness built (subagent, not ticked): refmodel `hw_matmul_v0` + `export_c.py` -> `hw/tests/nvfp4_v0{.c,_data.h}`; integer block sums (full-width int32 mvout) and float32 output bit-exact in Spike and Verilator (0/1280, 0/512). Negative control gives exactly 1 mismatch. Details in hw/README.md and logs/m4-v0.steps.
