@@ -44,11 +44,14 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - conda env was installed by hand from the committed lockfile, because build-setup step 1 broke (Python 3.15 vs conda-lock 2.5.7, and a sysroot 2.35 that doesn't exist).
 
 ## Decisions
+- 2026-10-17: **New baseline = Berkeley MX Gemmini** (`gemmini-mx-cleanup` @ 266c593f, with MxGen) in `~/chipyard-mx`. NVFP4 is built as deltas on top of it. Stock `~/chipyard` stays as the int8 reference.
 - 2026-10-11 (M3): first working version = v2; scales via a reserved scratchpad region + normal mvin; E2M1 as a new Float-style `Arithmetic` type; PE tests in ChiselSim/svsim.
 - 2026-10-10: Project code goes in its own repo `C:\Users\braed\gemmini-nvfp4`, separate from the Portfolio site.
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 
 ## Session log
+### 2026-10-17
+- M5 resumed (user confirmed the MX/MxGen base as the new baseline). Agent dispatched from step 1's conda env.
 ### 2026-10-14
 - M5 started, then stopped cleanly because the user had to log off. State: `~/chipyard-mx` clone at 1.14.0 only; partial conda env removed; `~/chipyard` untouched. Helper scripts in `logs/m5-*`.
 - Found the integration fork publicly: `ucb-bar/gemmini` branch `gemmini-mx-cleanup` (293 commits on our same base, mostly Nicolas Rakela Herrera + Amanda Shi; active through today). It has MxGen as a submodule, ScaleFactorMem, scaling applied at the array output before accumulation (same as our M3 design), FP4 2-per-byte packing, Chipyard configs, a libgemmini Spike model (branch `mxgemmini-functional-model`), and tests in public `Rakanic/gemmini-rocc-tests`. It's MX, not NVFP4: block 32 (half-parameterized), E8M0 scales (exponent add), BF16 acc, no tensor scale, rounded in-array sums. **Decision (user): use it as the base**, pinned at 266c593f (validated by Chipyard's graphics branch). Re-planned M5-M7. Old M5 (own E2M1 PE) dropped.
