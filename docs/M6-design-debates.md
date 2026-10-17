@@ -22,6 +22,12 @@ What the MX base already gives us (from the M5 survey; re-confirm any detail bef
 ---
 
 ## D1: How to implement the FP4×FP4 multiply in the PE
+**DECIDED 2026-10-17: V6, structured shift-mux + sign folded into the column adder + decode shared across the 2×2 PE.** The evidence is in `hw/pe_variants/RESULTS.md`:
+- PE-level AIG ANDs: V1 full LUT 1074, V2 magnitude LUT 816, V3 decode+`*` 1180, V4 shift-mux 757, V5 +sign-fold 797, V6 +shared decode 772 (depth 63 vs V4's 69).
+- The fixed rule picks V6, because it's within 5% of the best count and shallower.
+- The Chisel build matches the hand-written V6 (773 ANDs, depth 60) and is formally proven equivalent to the full LUT. The coordinator re-ran the proof and a mutation control.
+- **Correction:** the framing below claimed LUT/case would converge after synthesis. That was **wrong** for this flow: the full LUT came out 42% bigger than the structured version, and the generic `*` 56% bigger. Writing the structure explicitly pays off.
+
 **Question**: keep MxGen's floating-point multiply, or add an integer NVFP4 mode?
 
 **Key fact.** Doubled E2M1 magnitudes are {0,1,2,3,4,6,8,12}. Every nonzero one is `m·2^k` with `m ∈ {1,3}` and `k ∈ {0..3}`.
