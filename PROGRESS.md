@@ -51,6 +51,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-17
+- M5 run (subagent, not ticked): `~/chipyard-mx` (Chipyard 1.14.0, gemmini-mx-cleanup @ 266c593f, mxgen dba3e7e7, rocc-tests 350547f9, libgemmini 87663107) built with `MxFp4OnlyGemminiRocketConfig`. Verilator build 454 s, peak ~8.5 GB. Spike: all six branch FP4 tests (64x64, 128x128, 128x128x512, plus requants) PASSED. Verilator: fp4_64x64 104,276 cycles (75 s), 64x64_requant 103,466, 128x128 340,346 (213 s), all PASSED. Negative control fails as expected and passes after restore. `~/chipyard` M4 Spike still 0 mismatches. Per-row acc precision is in `ConfigsFP.scala` `defaultMxFPConfig`: product (4,4) x16 rows, acc sig 5/6/7/8 bits ramp (the FP4-only config inherits it). Details in logs/m5-mx.steps.
+### 2026-10-17
 - M5 resumed (user confirmed the MX/MxGen base as the new baseline). Agent dispatched from step 1's conda env.
 ### 2026-10-14
 - M5 started, then stopped cleanly because the user had to log off. State: `~/chipyard-mx` clone at 1.14.0 only; partial conda env removed; `~/chipyard` untouched. Helper scripts in `logs/m5-*`.
