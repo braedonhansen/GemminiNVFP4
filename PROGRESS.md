@@ -21,7 +21,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 - [x] M2: Chipyard + Gemmini built; stock Gemmini tests passing in Verilator (verified baseline)
 - [x] M3: Scope defined in [docs/M3-scope.md](docs/M3-scope.md). First working version = v2.
 - [x] M4 (v0): NVFP4 in software on stock Gemmini: refmodel → C test → Spike + Verilator. Integer block sums bit-exact.
-- [ ] M5: Bring up Berkeley's MX Gemmini (`ucb-bar/gemmini` branch `gemmini-mx-cleanup` @ `266c593f`, built on MxGen) in `~/chipyard-mx`; its FP4 tests pass in Spike + Verilator. Brief: [briefs/M5-mx-base-bringup.md](briefs/M5-mx-base-bringup.md)
+- [x] M5: Bring up Berkeley's MX Gemmini (`ucb-bar/gemmini` branch `gemmini-mx-cleanup` @ `266c593f`, built on MxGen) in `~/chipyard-mx`; its FP4 tests pass in Spike + Verilator. Brief: [briefs/M5-mx-base-bringup.md](briefs/M5-mx-base-bringup.md)
 - [ ] M6: NVFP4 deltas on the MX base: 16-element blocks, E4M3 scales (real multiply instead of E8M0 exponent add), FP32 accumulator + tensor scale, exact in-array block sums (if config allows). Mirror every change in the libgemmini Spike model. Verify with our refmodel + harness. **First working version.**
 - [ ] M7: Longer K, performance measurement vs. MX baseline.
 - [ ] Later: update the site write-up for the MX-base pivot; publish this repo (LICENSE + README + notices)
@@ -30,10 +30,16 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M5: **resume** [briefs/M5-mx-base-bringup.md](briefs/M5-mx-base-bringup.md) when the user can stay connected for the whole run (several hours). Stopped 2026-10-14 during step 1: `~/chipyard-mx` is cloned at 1.14.0; the half-built `.conda-env` was killed and deleted; nothing else done. Restart at step 1's conda env. the coordinator re-verifies Spike + Verilator FP4 passes and that `~/chipyard` M4 still passes.
-2. Decide the M6 exactness approach after M5 reports on `meshAccPrecisionList`: widen in-array precision for exact sums, or match the MX rounding model.
-3. Add LICENSE (BSD 3-Clause recommended; matches Gemmini/MxGen) + README + notices before publishing this repo.
-4. Later, update the site for the pivot (when M5 completes, per the milestone rule).
+1. M6 design decision (user): exactness approach. In-array FP4 sums on the MX base are rounded per row (accumulator significand ramps 5->8 bits; mesh output and acc are BF16; the libgemmini Spike model hardcodes the same ramp in `gemmini.cc:~1429`). Exact NVFP4 block sums need source changes to both the mesh output/acc width and the Spike model, not a config tweak. Options: (a) widen to exact + FP32 acc (our design); (b) keep MX rounding and match their model.
+2. M6 brief: 16-element blocks, E4M3 scales (multiplier), FP32 tensor scale, plus the chosen exactness path; mirror in libgemmini; verify with refmodel + harness, ported to the MX test style.
+3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
+
+## Environment notes (MX base, `~/chipyard-mx`)
+- Shell: `source ~/miniforge3/etc/profile.d/conda.sh; cd ~/chipyard-mx; source env.sh`. Its own RISCV/spike/libgemmini, separate from `~/chipyard`.
+- Gemmini 266c593f; mxgen dba3e7e7; rocc-tests 350547f9; libgemmini 876631072.
+- Sim: `sims/verilator`, `make CONFIG=MxFp4OnlyGemminiRocketConfig -j8` (454 s, 8.5 GB peak).
+- Tests: in `generators/gemmini/software/gemmini-rocc-tests`, `./build_spike.sh` + `./build_mx_rocket.sh bareMetalC`. Spike: `spike --extension=gemmini build_spike/bareMetalC/<t>-baremetal`. RTL: `make CONFIG=MxFp4OnlyGemminiRocketConfig LOADMEM=1 TIMEOUT_CYCLES=200000000 run-binary BINARY=.../build_mx_rocket/bareMetalC/<t>-baremetal`.
+- Make doesn't track test data headers: delete the binary to force a rebuild.
 
 ## Environment notes (Chipyard)
 - Chipyard 1.14.0 (`0acc1e1d`), Gemmini `8c3f9923`, Verilator 5.022, riscv gcc 13.2.0. Lives in WSL `~/chipyard`.
@@ -51,6 +57,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-17
+- M5 DONE (coordinator verified): re-ran Spike `matmul_tiled_fp4_64x64` + `_128x128x512_requant` (PASSED) and Verilator `fp4_64x64` (PASSED, 104,276 cycles, matching the agent). Agent: all 9 steps pass, negative control fails as expected, `~/chipyard` M4 still 0 mismatches.
 - M5 run (subagent, not ticked): `~/chipyard-mx` (Chipyard 1.14.0, gemmini-mx-cleanup @ 266c593f, mxgen dba3e7e7, rocc-tests 350547f9, libgemmini 87663107) built with `MxFp4OnlyGemminiRocketConfig`. Verilator build 454 s, peak ~8.5 GB. Spike: all six branch FP4 tests (64x64, 128x128, 128x128x512, plus requants) PASSED. Verilator: fp4_64x64 104,276 cycles (75 s), 64x64_requant 103,466, 128x128 340,346 (213 s), all PASSED. Negative control fails as expected and passes after restore. `~/chipyard` M4 Spike still 0 mismatches. Per-row acc precision is in `ConfigsFP.scala` `defaultMxFPConfig`: product (4,4) x16 rows, acc sig 5/6/7/8 bits ramp (the FP4-only config inherits it). Details in logs/m5-mx.steps.
 ### 2026-10-17
 - M5 resumed (user confirmed the MX/MxGen base as the new baseline). Agent dispatched from step 1's conda env.
