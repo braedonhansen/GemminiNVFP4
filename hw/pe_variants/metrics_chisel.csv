@@ -1,0 +1,3 @@
+top,aig_ands,aig_nots,gates_cmos2,depth_ltp,depth_and_levels
+NvFp4Mul,105,92,175,26,14
+NvFp4PE,773,695,1180,60,34

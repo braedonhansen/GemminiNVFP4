@@ -1,0 +1,8 @@
+2026-10-17T19:55Z | 1 eda env | PASS | Yosys 0.69+ (git 9f09efcdb), Icarus Verilog 13.0 (conda-forge, env ~/miniforge3/envs/eda)
+2026-10-17T19:55Z | 2 write V1-V6 + exhaustive TB | PASS | 0 mismatches: mul 256/256 and pe 393,216 vectors, all six variants, vs e2m1_pairs.hex
+2026-10-17T19:55Z | 3 formal equivalence | PASS | 10/10 miter proofs SUCCESS (V2-V6 vs V1, mul and pe); negative control (V4 9->8) FAIL as required (mul and pe), TB also fails
+2026-10-17T19:55Z | 4 synthesis metrics | PASS | hw/pe_variants/RESULTS.md + metrics_hand.csv (deterministic across two runs)
+2026-10-17T19:55Z | 5 decision | PASS | best PE AND = V4 757; within 5%: V6 772 (depth 63 < 69) -> V6 wins by depth tie-break
+2026-10-17T19:55Z | 6 Chisel elaboration | PASS | sbt runMain nvfp4pe.Elaborate -> NvFp4PE.sv, NvFp4Mul.sv (firtool 1.75.0, Chisel 6.7.0)
+2026-10-17T19:55Z | 7 ChiselSim exhaustive | PASS | NvFp4Mul 256/256, NvFp4PE 77,826 combos, 0 mismatches; negative control fails (36 and 31,250 mismatches) then repo copy passes
+2026-10-17T19:55Z | 8 Chisel synth + equiv | PASS | proven equivalent to V1; PE AND 773 vs hand V6 772 (+0.1%), gates 1180 vs 1164 (+1.4%)

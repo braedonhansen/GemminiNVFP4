@@ -1,0 +1,42 @@
+[info] welcome to sbt 1.8.2 (N/A Java 20.0.2-internal)
+[info] loading project definition from /home/braed/nvfp4-logs/m6.1-work/proj_neg/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to nvfp4pe (in build file:/home/braed/nvfp4-logs/m6.1-work/proj_neg/)
+[info] compiling 1 Scala source to /home/braed/nvfp4-logs/m6.1-work/proj_neg/target/scala-2.13/classes ...
+[info] done compiling
+[info] compiling 1 Scala source to /home/braed/nvfp4-logs/m6.1-work/proj_neg/target/scala-2.13/test-classes ...
+[info] done compiling
+MISMATCH a=3 w=3 got=8 exp=9
+MISMATCH a=3 w=5 got=16 exp=18
+MISMATCH a=3 w=7 got=32 exp=36
+MISMATCH a=3 w=11 got=-8 exp=-9
+MISMATCH a=3 w=13 got=-16 exp=-18
+MISMATCH a=3 w=15 got=-32 exp=-36
+MISMATCH a=5 w=3 got=16 exp=18
+MISMATCH a=5 w=5 got=32 exp=36
+MISMATCH a=5 w=7 got=64 exp=72
+RESULT NvFp4Mul checked=256 mismatches=36
+MISMATCH a=0,3 w=0,3 c=List(0, 0, 0, 0) got=List(0, 0, 0, 8) exp=List(0, 0, 0, 9)
+MISMATCH a=0,3 w=0,5 c=List(0, 0, 0, 0) got=List(0, 0, 0, 16) exp=List(0, 0, 0, 18)
+MISMATCH a=0,3 w=0,7 c=List(0, 0, 0, 0) got=List(0, 0, 0, 32) exp=List(0, 0, 0, 36)
+MISMATCH a=0,3 w=0,11 c=List(0, 0, 0, 0) got=List(0, 0, 0, -8) exp=List(0, 0, 0, -9)
+MISMATCH a=0,3 w=0,13 c=List(0, 0, 0, 0) got=List(0, 0, 0, -16) exp=List(0, 0, 0, -18)
+MISMATCH a=0,3 w=0,15 c=List(0, 0, 0, 0) got=List(0, 0, 0, -32) exp=List(0, 0, 0, -36)
+MISMATCH a=0,3 w=1,3 c=List(0, 0, 0, 0) got=List(0, 0, 3, 8) exp=List(0, 0, 3, 9)
+MISMATCH a=0,3 w=1,5 c=List(0, 0, 0, 0) got=List(0, 0, 3, 16) exp=List(0, 0, 3, 18)
+MISMATCH a=0,3 w=1,7 c=List(0, 0, 0, 0) got=List(0, 0, 3, 32) exp=List(0, 0, 3, 36)
+RESULT NvFp4PE checked=77826 mismatches=31250
+[info] NvFp4Spec:
+[info] - NvFp4Mul: all 256 (a,w) pairs match the golden JSON *** FAILED ***
+[info]   36 did not equal 0 (NvFp4Spec.scala:36)
+[info] - NvFp4PE: all 65536 (a0,a1,w0,w1) at c=0, plus 13-bit bound spot checks *** FAILED ***
+[info]   31250 did not equal 0 (NvFp4Spec.scala:68)
+[info] Run completed in 37 seconds, 180 milliseconds.
+[info] Total number of tests run: 2
+[info] Suites: completed 1, aborted 0
+[info] Tests: succeeded 0, failed 2, canceled 0, ignored 0, pending 0
+[info] *** 2 TESTS FAILED ***
+[error] Failed tests:
+[error] 	nvfp4pe.NvFp4Spec
+[error] (Test / test) sbt.TestsFailedException: Tests unsuccessful
+[error] Total time: 43 s, completed Oct 17, 2026, 12:54:52 PM

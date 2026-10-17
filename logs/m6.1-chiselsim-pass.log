@@ -1,0 +1,19 @@
+[info] welcome to sbt 1.8.2 (N/A Java 20.0.2-internal)
+[info] loading project definition from /home/braed/nvfp4-logs/m6.1-work/proj_main/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to nvfp4pe (in build file:/home/braed/nvfp4-logs/m6.1-work/proj_main/)
+[info] compiling 1 Scala source to /home/braed/nvfp4-logs/m6.1-work/proj_main/target/scala-2.13/classes ...
+[info] done compiling
+[info] compiling 1 Scala source to /home/braed/nvfp4-logs/m6.1-work/proj_main/target/scala-2.13/test-classes ...
+[info] done compiling
+RESULT NvFp4Mul checked=256 mismatches=0
+RESULT NvFp4PE checked=77826 mismatches=0
+[info] NvFp4Spec:
+[info] - NvFp4Mul: all 256 (a,w) pairs match the golden JSON
+[info] - NvFp4PE: all 65536 (a0,a1,w0,w1) at c=0, plus 13-bit bound spot checks
+[info] Run completed in 45 seconds, 429 milliseconds.
+[info] Total number of tests run: 2
+[info] Suites: completed 1, aborted 0
+[info] Tests: succeeded 2, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed.
+[success] Total time: 53 s, completed Oct 17, 2026, 12:44:06 PM
