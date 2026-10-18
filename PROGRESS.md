@@ -36,7 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.2: integer 13-bit column accumulation inside the MX mesh using the V6 PE (needs D2 confirmed by the user). Brief to write.
+1. M6.2 Phase A running: standalone NvFp4Mesh (13-bit int columns) + integration plan for the MX base. Brief: [briefs/M6.2-integer-column-mesh.md](briefs/M6.2-integer-column-mesh.md). Phase B (actual integration) waits for coordinator review of the plan.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 

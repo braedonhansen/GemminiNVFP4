@@ -56,6 +56,8 @@ What the MX base already gives us (from the M5 survey; re-confirm any detail bef
 **Sub-debate D1b**: replace MxGen's FP4 mode, or add NVFP4 as an extra mode and keep MX FP4? Keeping both makes the comparisons in D8 possible. Recommended: **add a mode**.
 
 ## D2: How to accumulate inside the array (down the WS column)
+**DECIDED 2026-10-17 (user): A, exact integer 13-bit signed per lane**, paired with the V6 PE from D1. NVFP4 block sums are exact in the array and match the refmodel bit for bit. MX's FP ramp stays untouched for MX modes.
+
 **Question**: should partial sums flowing down the 16 rows be integer or floating point?
 
 | Option | For | Against |
