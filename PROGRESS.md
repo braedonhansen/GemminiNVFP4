@@ -26,7 +26,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
   - [x] 6.0 Design review: D1-D7 decided
   - [x] 6.1 PE multiplier: synthesis experiment (LUT / case / generic `*` / shift-mux / sign-folded / shared-decode), winner built in Chisel with an exhaustive test. Brief: [briefs/M6.1-pe-multiplier-synthesis.md](briefs/M6.1-pe-multiplier-synthesis.md)
   - [x] 6.2 (Phase A) Exact integer column accumulation: standalone NvFp4Mesh verified + integration plan ([docs/M6.2-integration-plan.md](docs/M6.2-integration-plan.md))
-  - [ ] 6.3 (Phase A done 2026-10-17: standalone exact scale stage + FP32 acc, verified) E4M3 scale stage + FP32 acc + 16-element blocks + tensor scale
+  - [ ] 6.3 (Phase A done 10-17; Phase B integrated + verified 10-18; FP32 mvout + tensor scale still open) E4M3 scale stage + FP32 acc + 16-element blocks + tensor scale
   - [ ] 6.4 libgemmini Spike mirror
   - [ ] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator
 - [ ] M7: Longer K, performance measurement vs. MX baseline.
@@ -36,7 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.3 Phase B running: integration on local branch `nvfp4` in ~/chipyard-mx (B0 pipelined adder, B1 config/mesh swap, B2 AccumulatorMem, B3 scale addressing, B4 Verilator build, B5 MX regression).
+1. User: decide the -0 vs +0 first-write corner (see the 2026-10-18 log). Then M6.3 Phase C: FP32 mvout + tensor scale via acc_scale (D4/D6), currently missing (MxRequantizer/DMA assume 16-bit lanes; AccumulatorScale's MX branch ignores acc_scale).
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 
@@ -65,6 +65,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-18
+- M6.3 Phase B verified by the coordinator: branch `nvfp4` (631d0110, ee5991cd) sits on 266c593f; ported components identical to the verified standalone ones; standalone suite 11/11; MX FP4 64x64 still PASSES from the branch in Spike + Verilator; NVFP4 sim built. The agent's numeric RTL check (256 acc writes, 16,384 FP32 values exact, wrong-K-block control fails) used temporary debug code, so it's not independently re-runnable. M6.5's end-to-end test will cover it. Open: FP32 mvout + tensor scale; -0 corner; has_acc_mvin=false; unbalanced adder split (210/80).
 - M6.3 Phase B run (subagent, not ticked): NVFP4-only config on local branch `nvfp4` of `~/chipyard-mx/generators/gemmini` (2 commits on 266c593f: `631d0110`, `ee5991cd`; never pushed). `NvFp4GemminiRocketConfig` swaps in `NvFp4Mesh` (via a Mesh-shaped adapter at `MeshWithDelays.scala:187`), accType = 4 x IEEE FP32, scale stage + 2-stage `Fp32AccAdd2` inside `AccumulatorMem` (`NvFp4RmwPipe`, `acc_latency = 6`), raw-E4M3 `ScaleFactorMem`, `scaleSize` replaces both hardcoded 32s. RAW hazard handled by stall (forwarding impossible: loop-carried latency 6); mesh writes are >= 16 cycles apart so it never fires. B0 standalone (`hw/nvfp4pe`, 11/11 specs pass): 300k adder pairs and 11,529 same-address sequences bit-exact, negative control (stall off) 100,833 mismatches; adder stages 210/80 deep vs 263 unpipelined. B3 K=64 trace OK at `kScaleShift = 0`. B4 sim builds (311 s, ~7-8.5 GB). B5 MX FP4 64x64 still PASSES in Spike and Verilator from the branch. Extra: numeric RTL check of 256 accumulator writes (16,384 FP32 values) = 0 mismatches vs the refmodel float32 order, and a smoke run found/fixed an mvout-read port conflict. Not done: FP32 mvout and the tensor scale (`acc_scale`) path, and bias via accumulator mvin. Details: `docs/M6.3B-integration.md`, `logs/m6.3b.steps`, `logs/m6.3b-evidence.txt`.
 ### 2026-10-17
 - M6.3 Phase A DONE (coordinator verified): pytest 134 pass; full Chisel suite on a clean copy passes 9/9 (2 PE + 4 mesh + 3 scale); coordinator mutation (drop sB's sign from the stage-0 sign XOR, confirmed applied) makes 2 scale tests fail while the adder test passes. Scale stage: 4 lanes, 3 cycles, 4,859 ANDs, depth 96, exact. The FP32 adder (hardfloat) is the critical path (ltp 225-263).
