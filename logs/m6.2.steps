@@ -1,0 +1,7 @@
+2026-10-17T21:00Z | A1.1 MX semantics | PASS | docs/M6.2-integration-plan.md section 1 (Controller.scala:998-999, MxPE.scala:34-51, PE.scala:138-151, Mesh.scala:102-198, MeshWithDelays.scala:78-99,201-219, gemmini.cc:1160-1161,1851-1878)
+2026-10-17T21:00Z | A1.2 NvFp4Mesh Chisel | PASS | sbt compiles; ElaborateMesh -> generated/NvFp4Mesh_d16_l0.sv, NvFp4Mesh_d4_l0.sv (also d16_l1 in scratch); logs/m6.2-elab.log
+2026-10-17T21:00Z | A1.3 refmodel + vectors + pytest | PASS | mesh_block_sums, mesh_pass_vectors, mesh_passes_d{4,16}.txt; pytest 128 passed
+2026-10-17T21:00Z | A1.4 ChiselSim mesh tests | PASS | 4 tests, 0 mismatches: d4 13,248 x3 runs, d16 34,816 + 12,288 outputs (logs/m6.2-mesh-main.log)
+2026-10-17T21:00Z | A1.4 negative controls | PASS | carry-in dropped: all 4 tests fail (logs/m6.2-mesh-negcarry.log); weight select flipped: all 4 fail (logs/m6.2-mesh-negflip.log); repo copy untouched
+2026-10-17T21:00Z | A1.5 synthesis | PARTIAL | NvFp4Mesh d4 and d16 (L=1) done; MX FP4 PE (MxFpMul, from a copy) done; 16x16 MX array and d16 L=2 mesh synthesis not completed (time). hw/nvfp4pe/RESULTS-mesh.md
+2026-10-17T21:00Z | A2 integration plan | PASS | docs/M6.2-integration-plan.md

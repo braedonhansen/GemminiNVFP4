@@ -1,0 +1,21 @@
+
+5. Printing statistics.
+
+=== NvFp4Mesh_d16_l0 ===
+
+        +----------Local Count, excluding submodules.
+        | 
+   398252 wires
+   517692 wire bits
+    14658 public wires
+   134098 public wire bits
+      210 ports
+     1970 port bits
+   421354 cells
+   210635   $_AND_
+     2048   $_DFFE_PN_
+    17664   $_DFFE_PP_
+     2304   $_DFF_P_
+   188191   $_NOT_
+      512   $scopeinfo
+

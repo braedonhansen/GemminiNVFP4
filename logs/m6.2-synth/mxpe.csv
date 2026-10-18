@@ -1,0 +1,4 @@
+top,aig_ands,aig_nots,gates_cmos2,depth_ltp,depth_and_levels
+MxFpMul_a85,5165,4013,6840,175,108
+MxFpMul_a45,3494,2768,4842,142,84
+DONE

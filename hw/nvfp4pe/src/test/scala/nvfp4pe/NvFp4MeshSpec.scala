@@ -120,7 +120,7 @@ class NvFp4MeshSpec extends AnyFunSuite {
     val r = runMesh(16, 0, p, 0)
     report("mesh_d16_lat0", p.size, r)
     // both 13-bit extremes were actually exercised
-    val all = p.flatMap(_.c.flatten)
+    val all = p.flatMap(_.c.toSeq.flatMap(_.toSeq))
     assert(all.contains(2304) && all.contains(-2304))
     assert(r._2 == 0)
   }

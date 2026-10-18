@@ -1,0 +1,76 @@
+[info] welcome to sbt 1.8.2 (N/A Java 20.0.2-internal)
+[info] loading project definition from /home/braed/nvfp4-logs/m6.2-work/proj_negflip/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to nvfp4pe (in build file:/home/braed/nvfp4-logs/m6.2-work/proj_negflip/)
+[info] compiling 2 Scala sources to /home/braed/nvfp4-logs/m6.2-work/proj_negflip/target/scala-2.13/classes ...
+[info] done compiling
+[info] compiling 2 Scala sources to /home/braed/nvfp4-logs/m6.2-work/proj_negflip/target/scala-2.13/test-classes ...
+[info] done compiling
+MISMATCH pass=max_pos m=0 n=0 got=0 exp=576
+MISMATCH pass=max_pos m=0 n=1 got=0 exp=576
+MISMATCH pass=max_pos m=1 n=0 got=0 exp=576
+MISMATCH pass=max_pos m=1 n=1 got=0 exp=576
+MISMATCH pass=max_pos m=2 n=0 got=-144 exp=576
+MISMATCH pass=max_pos m=2 n=1 got=-144 exp=576
+MISMATCH pass=max_pos m=3 n=0 got=-144 exp=576
+MISMATCH pass=max_pos m=3 n=1 got=-144 exp=576
+MISMATCH pass=max_pos m=0 n=2 got=0 exp=576
+RESULT mesh_d4_lat0 passes=207 outputs_checked=13248 mismatches=12916
+MISMATCH pass=max_pos m=0 n=0 got=0 exp=576
+MISMATCH pass=max_pos m=0 n=1 got=0 exp=576
+MISMATCH pass=max_pos m=1 n=0 got=0 exp=576
+MISMATCH pass=max_pos m=1 n=1 got=0 exp=576
+MISMATCH pass=max_pos m=2 n=0 got=-144 exp=576
+MISMATCH pass=max_pos m=2 n=1 got=-144 exp=576
+MISMATCH pass=max_pos m=3 n=0 got=-144 exp=576
+MISMATCH pass=max_pos m=3 n=1 got=-144 exp=576
+MISMATCH pass=max_pos m=0 n=2 got=0 exp=576
+RESULT mesh_d4_lat0_gap3 passes=207 outputs_checked=13248 mismatches=12916
+MISMATCH pass=max_pos m=0 n=0 got=0 exp=576
+MISMATCH pass=max_pos m=0 n=1 got=0 exp=576
+MISMATCH pass=max_pos m=1 n=0 got=0 exp=576
+MISMATCH pass=max_pos m=1 n=1 got=0 exp=576
+MISMATCH pass=max_pos m=2 n=0 got=-144 exp=576
+MISMATCH pass=max_pos m=2 n=1 got=-144 exp=576
+MISMATCH pass=max_pos m=3 n=0 got=-144 exp=576
+MISMATCH pass=max_pos m=3 n=1 got=-144 exp=576
+MISMATCH pass=max_pos m=4 n=0 got=-288 exp=576
+RESULT mesh_d4_lat1 passes=207 outputs_checked=13248 mismatches=12916
+MISMATCH pass=refblocks0 m=0 n=0 got=0 exp=-114
+MISMATCH pass=refblocks0 m=0 n=1 got=0 exp=136
+MISMATCH pass=refblocks0 m=1 n=0 got=0 exp=176
+MISMATCH pass=refblocks0 m=1 n=1 got=0 exp=-18
+MISMATCH pass=refblocks0 m=2 n=0 got=144 exp=75
+MISMATCH pass=refblocks0 m=2 n=1 got=72 exp=-6
+MISMATCH pass=refblocks0 m=3 n=0 got=-12 exp=-21
+MISMATCH pass=refblocks0 m=3 n=1 got=-6 exp=-140
+MISMATCH pass=refblocks0 m=0 n=2 got=0 exp=118
+RESULT mesh_d16_lat0 passes=34 outputs_checked=34816 mismatches=31800
+MISMATCH pass=refblocks0 m=0 n=0 got=0 exp=-114
+MISMATCH pass=refblocks0 m=0 n=1 got=0 exp=136
+MISMATCH pass=refblocks0 m=1 n=0 got=0 exp=176
+MISMATCH pass=refblocks0 m=1 n=1 got=0 exp=-18
+MISMATCH pass=refblocks0 m=2 n=0 got=144 exp=75
+MISMATCH pass=refblocks0 m=2 n=1 got=72 exp=-6
+MISMATCH pass=refblocks0 m=3 n=0 got=-12 exp=-21
+MISMATCH pass=refblocks0 m=3 n=1 got=-6 exp=-140
+MISMATCH pass=refblocks0 m=4 n=0 got=40 exp=54
+RESULT mesh_d16_lat1_gap2 passes=12 outputs_checked=12288 mismatches=9318
+[info] NvFp4MeshSpec:
+[info] - DIM=4: 200+ random passes (>=10k exact block sums), back-to-back, tile_latency 0 *** FAILED ***
+[info]   12916 did not equal 0 (NvFp4MeshSpec.scala:106)
+[info] - DIM=4: same passes with idle gaps between passes and tile_latency 1 (MX default config) *** FAILED ***
+[info]   12916 did not equal 0 (NvFp4MeshSpec.scala:115)
+[info] - DIM=16: refmodel's 67 blocks (3 diagonal passes) + corner passes + random, back-to-back *** FAILED ***
+[info]   31800 did not equal 0 (NvFp4MeshSpec.scala:125)
+[info] - DIM=16: tile_latency 1 (two registers per hop, as in defaultMxFPConfig) with gaps *** FAILED ***
+[info]   9318 did not equal 0 (NvFp4MeshSpec.scala:132)
+[info] Run completed in 2 minutes, 11 seconds.
+[info] Total number of tests run: 4
+[info] Suites: completed 1, aborted 0
+[info] Tests: succeeded 0, failed 4, canceled 0, ignored 0, pending 0
+[info] *** 4 TESTS FAILED ***
+[error] Failed tests:
+[error] 	nvfp4pe.NvFp4MeshSpec
+[error] (Test / testOnly) sbt.TestsFailedException: Tests unsuccessful
+[error] Total time: 143 s (02:23), completed Oct 17, 2026, 5:42:52 PM

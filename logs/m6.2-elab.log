@@ -1,0 +1,12 @@
+[info] welcome to sbt 1.8.2 (N/A Java 20.0.2-internal)
+[info] loading project definition from /home/braed/nvfp4-logs/m6.2-work/projE/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to nvfp4pe (in build file:/home/braed/nvfp4-logs/m6.2-work/projE/)
+[info] compiling 2 Scala sources to /home/braed/nvfp4-logs/m6.2-work/projE/target/scala-2.13/classes ...
+[info] done compiling
+[info] running nvfp4pe.ElaborateMesh /home/braed/nvfp4-logs/m6.2-work/sv 16 0
+[success] Total time: 10 s, completed Oct 17, 2026, 5:43:35 PM
+[info] running nvfp4pe.ElaborateMesh /home/braed/nvfp4-logs/m6.2-work/sv 4 0
+[success] Total time: 1 s, completed Oct 17, 2026, 5:43:36 PM
+[info] running nvfp4pe.ElaborateMesh /home/braed/nvfp4-logs/m6.2-work/sv 16 1
+[success] Total time: 3 s, completed Oct 17, 2026, 5:43:38 PM

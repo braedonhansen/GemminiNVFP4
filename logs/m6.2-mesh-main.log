@@ -1,0 +1,24 @@
+[info] welcome to sbt 1.8.2 (N/A Java 20.0.2-internal)
+[info] loading project definition from /home/braed/nvfp4-logs/m6.2-work/proj_main/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to nvfp4pe (in build file:/home/braed/nvfp4-logs/m6.2-work/proj_main/)
+[info] compiling 2 Scala sources to /home/braed/nvfp4-logs/m6.2-work/proj_main/target/scala-2.13/classes ...
+[info] done compiling
+[info] compiling 2 Scala sources to /home/braed/nvfp4-logs/m6.2-work/proj_main/target/scala-2.13/test-classes ...
+[info] done compiling
+RESULT mesh_d4_lat0 passes=207 outputs_checked=13248 mismatches=0
+RESULT mesh_d4_lat0_gap3 passes=207 outputs_checked=13248 mismatches=0
+RESULT mesh_d4_lat1 passes=207 outputs_checked=13248 mismatches=0
+RESULT mesh_d16_lat0 passes=34 outputs_checked=34816 mismatches=0
+RESULT mesh_d16_lat1_gap2 passes=12 outputs_checked=12288 mismatches=0
+[info] NvFp4MeshSpec:
+[info] - DIM=4: 200+ random passes (>=10k exact block sums), back-to-back, tile_latency 0
+[info] - DIM=4: same passes with idle gaps between passes and tile_latency 1 (MX default config)
+[info] - DIM=16: refmodel's 67 blocks (3 diagonal passes) + corner passes + random, back-to-back
+[info] - DIM=16: tile_latency 1 (two registers per hop, as in defaultMxFPConfig) with gaps
+[info] Run completed in 1 minute, 43 seconds.
+[info] Total number of tests run: 4
+[info] Suites: completed 1, aborted 0
+[info] Tests: succeeded 4, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed.
+[success] Total time: 112 s (01:52), completed Oct 17, 2026, 5:38:07 PM

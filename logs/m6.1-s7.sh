@@ -8,6 +8,6 @@ cp -r /mnt/c/Users/braed/gemmini-nvfp4/hw/nvfp4pe/{build.sbt,project,src} $W/pro
 [ -n "$2" ] && bash -c "$2"   # optional mutation applied to the scratch copy
 cd $W/proj_$TAG
 # tests find the golden via ../../refmodel relative to cwd; provide it in scratch
-mkdir -p $W/proj_$TAG/refmodel/vectors && cp /mnt/c/Users/braed/gemmini-nvfp4/refmodel/vectors/e2m1_pairs.json $W/proj_$TAG/refmodel/vectors/
+mkdir -p $W/proj_$TAG/refmodel/vectors && cp /mnt/c/Users/braed/gemmini-nvfp4/refmodel/vectors/* $W/proj_$TAG/refmodel/vectors/
 S=$(date +%s)
 sbt -batch test > $W/s7_$TAG.log 2>&1; echo "rc=$? secs=$(( $(date +%s)-S ))" > $W/s7_$TAG.done

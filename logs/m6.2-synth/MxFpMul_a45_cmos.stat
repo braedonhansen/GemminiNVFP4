@@ -1,0 +1,19 @@
+
+5. Printing statistics.
+
+=== MxFpMul ===
+
+        +----------Local Count, excluding submodules.
+        | 
+     4991 wires
+     6414 wire bits
+      189 public wires
+     1612 public wire bits
+       20 ports
+      145 port bits
+     4877 cells
+     2113   $_NAND_
+     2179   $_NOR_
+      550   $_NOT_
+       35   $scopeinfo
+
