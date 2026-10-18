@@ -36,7 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.3 Phase B (integration on a local `nvfp4` branch in ~/chipyard-mx): waiting on the user's decision on the accumulator SRAM format (IEEE FP32 vs hardfloat-recoded 33-bit) and adder pipelining.
+1. M6.3 Phase B running: integration on local branch `nvfp4` in ~/chipyard-mx (B0 pipelined adder, B1 config/mesh swap, B2 AccumulatorMem, B3 scale addressing, B4 Verilator build, B5 MX regression).
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 
@@ -56,6 +56,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - conda env was installed by hand from the committed lockfile, because build-setup step 1 broke (Python 3.15 vs conda-lock 2.5.7, and a sysroot 2.35 that doesn't exist).
 
 ## Decisions
+- 2026-10-17 (M6.3 Phase B, user): accumulator SRAM stores IEEE FP32; FP32 adder pipelined now (2 stages) with explicit RAW handling.
 - 2026-10-17 (M6.2 integration, user): NVFP4-only config (option iii); scale stage inside AccumulatorMem replacing applyE9M0Scale (raise acc_latency); ScaleFactorMem outputs raw E4M3 bytes; Spike NVFP4 via build define.
 - 2026-10-17: **New baseline = Berkeley MX Gemmini** (`gemmini-mx-cleanup` @ 266c593f, with MxGen) in `~/chipyard-mx`. NVFP4 is built as deltas on top of it. Stock `~/chipyard` stays as the int8 reference.
 - 2026-10-11 (M3): first working version = v2; scales via a reserved scratchpad region + normal mvin; E2M1 as a new Float-style `Arithmetic` type; PE tests in ChiselSim/svsim.
