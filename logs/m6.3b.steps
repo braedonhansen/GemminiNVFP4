@@ -1,0 +1,9 @@
+2026-10-18 | B0 Fp32AccAdd2 (2-stage) + NvFp4RmwPipe (hw/nvfp4pe) | PASS | NvFp4AccSpec: 300,100 adder pairs 0 mismatches vs JVM float and vs 1-cycle adder; 11,529 same-address accumulate sequences (122,520 FP32 values checked) 0 mismatches, 10,986 stall cycles; full standalone suite 11/11 pass
+2026-10-18 | B0 negative control (io.ready := true.B, grep -c 0 -> 1) | PASS | 100,833 mismatches, 0 stalls
+2026-10-18 | B0 synthesis | PASS | S1 2,692 ANDs depth 210; S2 983 ANDs depth 80; whole adder2 3,686 ANDs depth 206 (1-cycle: 3,443 / 263)
+2026-10-18 | B1 NvFp4GemminiRocketConfig + MxFp4Only elaborate | PASS | make verilog rc 0 for both (182 s / 68 s); NVFP4 Verilog has NvFp4Mesh/PE/ScaleStage/Fp32AccAdd2/RmwPipe, no MxFpMul/MxPE/Mesh/Tile; Q6 lists consumed only by Mesh/Tile/PE
+2026-10-18 | B2 scale stage + pipelined adder in AccumulatorMem, raw-E4M3 ScaleFactorMem, acc_latency 6 | PASS | elaborates; hazard = stall via NvFp4RmwPipe.ready (docs/M6.3B-integration.md); numeric RTL check 256 writes / 16,384 FP32 values 0 mismatches (neg control 16,062)
+2026-10-18 | B3 scale-memory address trace K=64 | PASS | logs/m6.3b-b3-trace.txt: 16 passes, A/B scale rows = k*2+i / k*2+j, ALL PASSES OK at kScaleShift 0
+2026-10-18 | B4 Verilator build NvFp4GemminiRocketConfig | PASS | simulator 21.4 MB; clean build 311 s, peak system memory 7.2 GB (sampled; other runs 2.2-8.5 GB)
+2026-10-18 | B5 MX FP4 regression from branch | PASS | MxFp4Only sim rebuilt (373 s); matmul_tiled_fp4_64x64 Spike PASSED rc 0, Verilator PASSED rc 0 (97 s)
+2026-10-18 | smoke: M5 test on NVFP4 sim | PASS (found+fixed bug) | first run tripped AsymmetricTwoPortSyncMem 'cannot read full and chunk simultaneously'; fixed in branch ee5991cd; rerun finishes with only the expected data mismatches, no RTL assertion
