@@ -25,7 +25,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 - [ ] M6: NVFP4 on the MX base. **First working version.** Split into checkpoints gated by design debates; see [docs/M6-design-debates.md](docs/M6-design-debates.md):
   - [x] 6.0 Design review: D1-D7 decided
   - [x] 6.1 PE multiplier: synthesis experiment (LUT / case / generic `*` / shift-mux / sign-folded / shared-decode), winner built in Chisel with an exhaustive test. Brief: [briefs/M6.1-pe-multiplier-synthesis.md](briefs/M6.1-pe-multiplier-synthesis.md)
-  - [ ] 6.2 Exact integer column accumulation
+  - [x] 6.2 (Phase A) Exact integer column accumulation: standalone NvFp4Mesh verified + integration plan ([docs/M6.2-integration-plan.md](docs/M6.2-integration-plan.md))
   - [ ] 6.3 E4M3 scale stage + FP32 acc + 16-element blocks + tensor scale
   - [ ] 6.4 libgemmini Spike mirror
   - [ ] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator
@@ -36,7 +36,8 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.2 Phase A running: standalone NvFp4Mesh (13-bit int columns) + integration plan for the MX base. Brief: [briefs/M6.2-integer-column-mesh.md](briefs/M6.2-integer-column-mesh.md). Phase B (actual integration) waits for coordinator review of the plan.
+1. User: decide the integration questions from docs/M6.2-integration-plan.md section 7 (Q1 build type, Q2/Q5 where the scale stage lives + latency, Q3 scale-memory output, Q8 Spike switch). Q4/Q6/Q7 are engineering checks folded into 6.3/6.5.
+2. Then write the M6.3 brief (integration into ~/chipyard-mx + scale stage + FP32 acc).
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 
@@ -63,6 +64,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-17
+- M6.2 Phase A DONE (coordinator verified): pytest 128 pass; by-hand m6.1-s7.sh now runs all 6 Chisel specs (2 PE + 4 mesh), all pass; coordinator mutation (swap the mesh weight-buffer select, confirmed applied) makes the 4 mesh tests fail while the PE tests pass. The DIM=16 mesh is 823 ANDs/PE (+6.4% over the bare PE), depth 71; the MX FP4 PE is 4.5-6.7x larger per PE. The full MX array's synthesis didn't finish (extrapolated, labelled). The agent recommends option (iii), an NVFP4-only config.
 - M6.2 Phase A run (subagent, not ticked): `NvFp4Mesh` (hw/nvfp4pe, 16x16 weight-stationary, V6 PEs, exact `SInt(13)` x4 column sums, same pairing/flow/register structure as MX Gemmini's Mesh/PE) is bit-exact vs the refmodel integer block sums: DIM=4 13,248 outputs x3 runs, DIM=16 34,816 + 12,288 outputs incl. the 67 refmodel blocks and both +/-2304 extremes, back-to-back passes with alternating c1/c2, 0 mismatches; two negative controls (carry-in dropped, weight select flipped) fail every test. DIM=16 mesh: 210,635 AIG ANDs (823/PE vs 773 bare PE), 22,016 flops, depth 71. MX FP4 PE (MxFpMul from a copy): 5,165 ANDs depth 175 (BF16 acc) / 3,494 depth 142 (E4M5 acc), i.e. 4.5-6.7x the NVFP4 PE; the full 16x16 MX array synthesis did not finish and is not reported. Integration plan docs/M6.2-integration-plan.md: MX semantics with file:line, 3 options, mesh-to-accumulator boundary; recommends an NVFP4-only config (option iii) with the seam at MeshWithDelays.scala:187. Details: hw/nvfp4pe/RESULTS-mesh.md, logs/m6.2.steps.
 - Project report written as a Claude doc: https://claude.ai/code/artifact/6dfe7976-7d12-4660-828d-2fc0198a4aab (status, 2 diagrams, arithmetic, multiplier study, decisions, verification, environment, run-by-hand steps, next, sources). The coordinator ran its by-hand commands: pytest, both Spike runs, and m6.1-s2/s3 pass; m6.1-s7's two PE tests pass, but M6.2's in-progress mesh tests fail in the scratch copy (vector files not copied). The M6.2 agent was told to fix the script. Update the report when 6.2 lands.
 - 6.0 done: user decided D3 (exact fixed-function scale stage), D4 (FP32 acc + FP32 mvout), D5 (DIM=16, scaleSize=16), D6 (tensor scale via acc_scale at mvout); D7 recorded. Site date fix: the MX-foundation update is dated Oct 16.
