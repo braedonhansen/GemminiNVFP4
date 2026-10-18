@@ -36,7 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. User: decide the -0 vs +0 first-write corner (see the 2026-10-18 log). Then M6.3 Phase C: FP32 mvout + tensor scale via acc_scale (D4/D6), currently missing (MxRequantizer/DMA assume 16-bit lanes; AccumulatorScale's MX branch ignores acc_scale).
+1. M6.3 Phase C running (brief section "Phase C"): FP32 mvout + tensor scale via acc_scale (D4/D6), currently missing (MxRequantizer/DMA assume 16-bit lanes; AccumulatorScale's MX branch ignores acc_scale).
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 
@@ -56,6 +56,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - conda env was installed by hand from the committed lockfile, because build-setup step 1 broke (Python 3.15 vs conda-lock 2.5.7, and a sysroot 2.35 that doesn't exist).
 
 ## Decisions
+- 2026-10-18 (user): -0 corner: the hardware matches the refmodel (first write = +0 + blk through the adder). Phase C started: FP32 mvout + tensor scale via acc_scale + first end-to-end RTL matmul.
 - 2026-10-17 (M6.3 Phase B, user): accumulator SRAM stores IEEE FP32; FP32 adder pipelined now (2 stages) with explicit RAW handling.
 - 2026-10-17 (M6.2 integration, user): NVFP4-only config (option iii); scale stage inside AccumulatorMem replacing applyE9M0Scale (raise acc_latency); ScaleFactorMem outputs raw E4M3 bytes; Spike NVFP4 via build define.
 - 2026-10-17: **New baseline = Berkeley MX Gemmini** (`gemmini-mx-cleanup` @ 266c593f, with MxGen) in `~/chipyard-mx`. NVFP4 is built as deltas on top of it. Stock `~/chipyard` stays as the int8 reference.
