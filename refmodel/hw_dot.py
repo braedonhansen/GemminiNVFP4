@@ -28,6 +28,20 @@ def block_sums(qa, qb):
     return sums
 
 
+def mesh_block_sums(a_codes, b_codes):
+    """Expected integer block-sum matrix for one K block.
+
+    a_codes: (M, K) E2M1 codes, b_codes: (K, N) E2M1 codes (K = 16 for NVFP4).
+    Returns (M, N) int32: C[m, n] = sum_k int(a[m,k]) * int(b[k,n]), the exact
+    value the weight-stationary mesh produces at its bottom row. Must fit 13 bits.
+    """
+    ia = code_to_int(np.asarray(a_codes)).astype(np.int64)
+    ib = code_to_int(np.asarray(b_codes)).astype(np.int64)
+    c = ia @ ib
+    check_acc(c)
+    return c.astype(np.int32)
+
+
 def hw_matmul(qa, qb):
     """qa: (M, K), qb: (N, K) (B transposed). Returns (M, N) float64.
 

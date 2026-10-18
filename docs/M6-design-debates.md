@@ -1,6 +1,6 @@
 # M6 design debates
 
-Status: **OPEN**. Started 2026-10-17. Each debate ends in a decision record: option chosen, why, and the evidence. M6 work is split into checkpoints, and each one is gated on the debates it depends on.
+Status: **D1-D7 DECIDED** (2026-10-17); D8 is a measurement plan. New questions may come from the M6.2 integration plan.. Started 2026-10-17. Each debate ends in a decision record: option chosen, why, and the evidence. M6 work is split into checkpoints, and each one is gated on the debates it depends on.
 
 ## Checkpoint review: where we are
 | # | Checkpoint | State | Still valid? |
@@ -69,6 +69,8 @@ What the MX base already gives us (from the M5 survey; re-confirm any detail bef
 This also settles the open "exactness" question from the 2026-10-17 session: **A, if D1 = B**.
 
 ## D3: The scale stage: E4M3 × E4M3 × isum
+**DECIDED 2026-10-17 (user): A, exact fixed-function stage** (sA·sB as a 4×4 significand multiply + exponent add → ×isum 13b×8b = 21b → pack to FP32, no rounding; fully pipelined).
+
 Today MX does `applyE9M0Scale`, an exponent add on a BF16 value with no multiplier.
 
 | Option | For | Against |
@@ -80,22 +82,30 @@ Today MX does `applyE9M0Scale`, an exponent add on a BF16 value with no multipli
 **How to settle**: the latency budget in `AccumulatorMem`, and whether the stage closes timing in their pipeline (Verilator alone can't tell us, so look at logic depth from Yosys).
 
 ## D4: Accumulator datatype and width
+**DECIDED 2026-10-17 (user): FP32 accumulator, FP32 mvout.** An NVFP4 requantizer on mvout is a later stretch goal.
+
 - **A. FP32 accumulator (recommended).** It matches NVFP4 practice (FP32 accumulation) and our refmodel. The cost is 2× accumulator SRAM width compared with BF16: the capacity halves at the same area, or the area doubles.
 - B. BF16 (MX default). Cheaper, but rounds every block add, so it diverges from NVFP4 references for long K.
 - Open sub-question: what does mvout emit, FP32 or requantized NVFP4? MX already has a requantizer (BF16 → MX). An NVFP4 requantizer (FP32 → E2M1 + E4M3 + tensor scale) would be a later stretch goal.
 
 ## D5: Block size 16 and scale bookkeeping
+**DECIDED 2026-10-17 (user): DIM=16 only.** Replace MX's hardcoded 32s with `scaleSize`, and set `scaleSize=16` in the NVFP4 config.
+
 - With DIM=16, one array pass = one 16-element block (`tilesPerMxBlock = 1`).
 - MX hardcodes 32 in `ScaleFactorMem.scala:196` and `LoopMatmul.scala:1118`, while `scaleSize` exists as a config field.
 - **Recommended**: make both hardcodes use `scaleSize`, and set `scaleSize = 16` in the NVFP4 config. Also update the matching `/32` assumptions in rocc-tests and libgemmini.
 - **Debate**: also keep DIM=32 working (2 blocks per pass) or not? Recommended: **DIM=16 only** for M6.
 
 ## D6: The FP32 tensor scale
+**DECIDED 2026-10-17 (user): A, reuse the CONFIG_EX `acc_scale` at mvout**, `out = acc · (tA·tB/4)`, in the refmodel's float32 order.
+
 - A. Reuse the legacy CONFIG_EX `acc_scale` (32-bit, applied at mvout; MX ignores it today). Cheap.
 - B. A new config register applied in the scale stage, folded into stage 0 as `tA·tB·sA·sB`. That multiply is no longer exact, because the FP32 tensor scales have 24-bit significands.
 - **Recommended: A.** Apply it once at mvout, matching the refmodel's float32 order: `out = acc · (tA·tB/4)`.
 
 ## D7: Spike model and verification
+**DECIDED 2026-10-17: refmodel is golden → libgemmini bit-exact to it → RTL bit-exact to libgemmini**, with a negative control in every test (consistent with the user's bit-exact choices in M3/M4).
+
 - libgemmini mirrors the RTL, so every NVFP4 change goes into both. Debate: which is the golden source?
 - **Recommended**:
   - the **refmodel** is golden;

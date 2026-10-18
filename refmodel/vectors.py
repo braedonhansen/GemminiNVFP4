@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from formats import e4m3_decode
 from quant import quantize, NVFP4Tensor
-from hw_dot import code_to_int, hw_matmul, block_sums
+from hw_dot import code_to_int, hw_matmul, block_sums, mesh_block_sums
 
 OUT = Path(__file__).parent / "vectors"
 
@@ -59,6 +59,64 @@ def block_vectors(n=64, seed=1):
     return rows
 
 
+def _pass(name, a, b):
+    """One mesh pass: A (M,K) codes, B (K,N) codes, C = exact integer block sums."""
+    a, b = np.asarray(a, np.uint8), np.asarray(b, np.uint8)
+    return {"name": name, "A": a, "B": b, "C": mesh_block_sums(a, b)}
+
+
+def mesh_pass_vectors(dim=16, n_random=24, seed=7):
+    """Weight-stationary mesh passes for a dim x dim array holding 2 E2M1 values per PE input.
+
+    One pass = one K block of length K = dim:  A is M x K and B is K x N with M = N = 2*dim
+    (two M rows share a pair on each mesh row, two N columns share a pair on each mesh column).
+    dim=16 passes: refmodel's 67 block vectors (every block sits on the diagonal of some pass),
+    corner passes (+-2304 extremes, zeros, alternating signs) and random passes.
+    """
+    m = n = 2 * dim
+    rng = np.random.default_rng(seed)
+    passes = []
+    if dim == 16:
+        blocks = block_vectors()
+        nb = len(blocks)  # 67
+        for p in range(-(-nb // m)):
+            ia = [(m * p + i) % nb for i in range(m)]
+            a = np.array([blocks[i]["a_codes"] for i in ia], np.uint8)          # (M, 16)
+            b = np.array([blocks[i]["b_codes"] for i in ia], np.uint8).T        # (16, N)
+            ps = _pass(f"refblocks{p}", a, b)
+            ps["diag_blocks"] = [(i, blocks[ia[i]]["int_sum"]) for i in range(m) if m * p + i < nb]
+            passes.append(ps)
+    full = lambda c, r, cc: np.full((r, cc), c, np.uint8)
+    k = dim
+    passes += [
+        _pass("max_pos", full(7, m, k), full(7, k, n)),        # +6 * +6 doubled = +12*12 -> +144 each, x16 = +2304
+        _pass("max_neg", full(7, m, k), full(15, k, n)),       # -2304
+        _pass("neg_neg", full(15, m, k), full(15, k, n)),      # +2304
+        _pass("zeros", full(0, m, k), full(0, k, n)),
+        _pass("neg_zero", full(8, m, k), full(15, k, n)),      # -0 operands -> 0
+    ]
+    alt_k = np.tile(np.where(np.arange(k) % 2 == 0, 7, 15).astype(np.uint8), (m, 1))
+    passes.append(_pass("alt_k", alt_k, full(7, k, n)))        # +144,-144,... -> 0
+    sign_m = np.tile(np.where(np.arange(m) % 2 == 0, 7, 15).astype(np.uint8)[:, None], (1, k))
+    sign_n = np.tile(np.where(np.arange(n) % 2 == 0, 7, 15).astype(np.uint8)[None, :], (k, 1))
+    passes.append(_pass("checker", sign_m, sign_n))            # +-2304 checkerboard
+    for i in range(n_random):
+        passes.append(_pass(f"rand{i}", rng.integers(0, 16, (m, k)), rng.integers(0, 16, (k, n))))
+    return passes
+
+
+def write_mesh_passes(path, passes):
+    """Text format (easy to parse from Scala): 'PASS name M K N', M lines of A, K lines of B, M lines of C."""
+    lines = []
+    for p in passes:
+        mm, kk = p["A"].shape
+        nn = p["B"].shape[1]
+        lines.append(f"PASS {p['name']} {mm} {kk} {nn}")
+        for mat in (p["A"], p["B"], p["C"]):
+            lines += [" ".join(str(int(x)) for x in row) for row in mat]
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
 def export(out=OUT):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -77,6 +135,9 @@ def export(out=OUT):
         for r in blocks
     ]
     (out / "blocks.hex").write_text("".join(lines))
+
+    write_mesh_passes(out / "mesh_passes_d16.txt", mesh_pass_vectors(16))
+    write_mesh_passes(out / "mesh_passes_d4.txt", mesh_pass_vectors(4, n_random=200, seed=11))
 
     (out / "e4m3_table.json").write_text(json.dumps(
         [None if np.isnan(v) else float(v) for v in e4m3_decode(np.arange(256))]))
