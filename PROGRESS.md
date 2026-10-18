@@ -36,8 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. User: decide the integration questions from docs/M6.2-integration-plan.md section 7 (Q1 build type, Q2/Q5 where the scale stage lives + latency, Q3 scale-memory output, Q8 Spike switch). Q4/Q6/Q7 are engineering checks folded into 6.3/6.5.
-2. Then write the M6.3 brief (integration into ~/chipyard-mx + scale stage + FP32 acc).
+1. M6.3: dispatch [briefs/M6.3-scale-stage-integration.md](briefs/M6.3-scale-stage-integration.md). Phase A (standalone scale stage) then Phase B (integration on a local `nvfp4` branch in ~/chipyard-mx), with a coordinator check between them.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 
@@ -57,6 +56,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - conda env was installed by hand from the committed lockfile, because build-setup step 1 broke (Python 3.15 vs conda-lock 2.5.7, and a sysroot 2.35 that doesn't exist).
 
 ## Decisions
+- 2026-10-17 (M6.2 integration, user): NVFP4-only config (option iii); scale stage inside AccumulatorMem replacing applyE9M0Scale (raise acc_latency); ScaleFactorMem outputs raw E4M3 bytes; Spike NVFP4 via build define.
 - 2026-10-17: **New baseline = Berkeley MX Gemmini** (`gemmini-mx-cleanup` @ 266c593f, with MxGen) in `~/chipyard-mx`. NVFP4 is built as deltas on top of it. Stock `~/chipyard` stays as the int8 reference.
 - 2026-10-11 (M3): first working version = v2; scales via a reserved scratchpad region + normal mvin; E2M1 as a new Float-style `Arithmetic` type; PE tests in ChiselSim/svsim.
 - 2026-10-10: Project code goes in its own repo `C:\Users\braed\gemmini-nvfp4`, separate from the Portfolio site.
