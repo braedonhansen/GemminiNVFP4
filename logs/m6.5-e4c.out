@@ -1,0 +1,15 @@
+== (c) Spike model with the N-tile (j-group) offset of the FP32 store mutated, shape 1
+before: 1
+mutation applied: 1
+gcc_rc=0
+libs loaded:
+      1615:	calling init: /home/braed/nvfp4-logs/neg65/libgemmini_nvfp4.so
+MISMATCH out[0][0]: got 0x40a62138 want 0xc2119260
+MISMATCH out[0][1]: got 0xc35075e8 want 0x438be7af
+MISMATCH out[0][2]: got 0x414a17aa want 0xc1fd946a
+MISMATCH out[0][3]: got 0xc213c7b4 want 0xc120abb6
+spike_rc=1
+== sanity: unmutated installed lib, same binary
+nvfp4_mt_m64n64k128 M=64 K=128 N=64: 0 mismatches of 4096 outputs, 550 cycles (config + loads + matmul + mvout)
+spike_rc=0
+nvfp4_mt_m64n64k128 M=64 K=128 N=64: 3968 mismatches of 4096 outputs, 550 cycles (config + loads + matmul + mvout)

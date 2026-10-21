@@ -1,0 +1,41 @@
+matmul_tiled_asym_e2m3_fp4_64x64-baremetal
+matmul_tiled_asym_e2m3_fp4_64x64_dim32-baremetal
+matmul_tiled_asym_e2m3_fp4_64x64_dim8-baremetal
+matmul_tiled_asym_e4m3_fp4_64x64-baremetal
+matmul_tiled_asym_e4m3_fp4_64x64_dim32-baremetal
+matmul_tiled_asym_e4m3_fp4_64x64_dim8-baremetal
+matmul_tiled_asym_e4m3s_fp4_128x128-baremetal
+matmul_tiled_asym_e4m3s_fp4_128x128x256_dim32-baremetal
+matmul_tiled_asym_e4m3s_fp4_64x64-baremetal
+matmul_tiled_asym_e4m3s_fp4_64x64_dim32-baremetal
+matmul_tiled_asym_e4m3s_fp4_64x64_dim8-baremetal
+matmul_tiled_asym_e5m2_fp4_64x64-baremetal
+matmul_tiled_asym_e5m2_fp4_64x64_dim32-baremetal
+matmul_tiled_asym_e5m2_fp4_64x64_dim8-baremetal
+matmul_tiled_asym_fp6_fp4_64x64-baremetal
+matmul_tiled_asym_fp6_fp4_64x64_dim32-baremetal
+matmul_tiled_asym_fp6_fp4_64x64_dim8-baremetal
+matmul_tiled_fp4_128x128-baremetal
+matmul_tiled_fp4_128x128_chain-baremetal
+matmul_tiled_fp4_128x128_nonrequant_dim32-baremetal
+matmul_tiled_fp4_128x128_requant-baremetal
+matmul_tiled_fp4_128x128_requant_dim32-baremetal
+matmul_tiled_fp4_128x128x512-baremetal
+matmul_tiled_fp4_128x128x512_requant-baremetal
+matmul_tiled_fp4_128x128x64_requant_dim32-baremetal
+matmul_tiled_fp4_64x64-baremetal
+matmul_tiled_fp4_64x64_DRAMMvout-baremetal
+matmul_tiled_fp4_64x64_chain-baremetal
+matmul_tiled_fp4_64x64_nonrequant_dim32-baremetal
+matmul_tiled_fp4_64x64_requant-baremetal
+matmul_tiled_fp4_64x64_requant_dim32-baremetal
+matmul_tiled_fp4_64x64_requant_dim8-baremetal
+installed libs: e9a23528fbc6 c419a657e528 20bcf4937e7c f49ab9072656 
+matmul_tiled_fp4_64x64 spike rc=0: 1 PASSED lines, 1 FAILED/mismatch lines
+matmul_tiled_fp4_128x128 spike rc=0: 1 PASSED lines, 1 FAILED/mismatch lines
+matmul_tiled_fp4_64x64_requant spike rc=0: 1 PASSED lines, 1 FAILED/mismatch lines
+matmul_tiled_fp4_128x128_requant spike rc=0: 1 PASSED lines, 1 FAILED/mismatch lines
+-- also the 3 original nvfp4 e2e in spike_nvfp4 with the (unchanged) rebuilt binaries
+nvfp4_e2e M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+nvfp4_e2e_s2 M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+nvfp4_e2e_s3 M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)

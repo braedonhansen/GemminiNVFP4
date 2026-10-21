@@ -1,0 +1,16 @@
+before: 1 occurrence(s) of the j-term
+after: mutated j-term count = 1 (applied if 1); git diff lines: 2
+rc=0 secs=300 peak_used_MB=6993
+run neg rc=2
+nvfp4_mt_m64n64k128 M=64 K=128 N=64: 3008 mismatches of 4096 outputs, 8285 cycles (config + loads + matmul + mvout)
+[490655000] %Error: TestHarness.sv:99: Assertion failed in TOP.TestDriver.testHarness: Assertion failed: *** FAILED *** (exit code =          1)
+MISMATCH out[0][16]: got 0x40a62138 want 0x3f61312e
+MISMATCH out[0][17]: got 0xc35075e8 want 0x4299be80
+MISMATCH out[0][18]: got 0x414a17aa want 0x40c160ee
+MISMATCH out[0][19]: got 0xc213c7b4 want 0x407d60f9
+--- restore with git checkout and rebuild
+restored: mutated count = 0, original count = 1; git status:
+(clean)
+rc=0 secs=344 peak_used_MB=7867
+run restored rc=0
+nvfp4_mt_m64n64k128 M=64 K=128 N=64: 0 mismatches of 4096 outputs, 8285 cycles (config + loads + matmul + mvout)

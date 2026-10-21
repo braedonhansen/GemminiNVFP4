@@ -1,0 +1,5 @@
+2488 2026-10-18 15:03:16.444060120 -0700 simulator-chipyard.harness-MxFp4OnlyGemminiRocketConfig
+rc=0 secs=1184
+	+dramsim +dramsim_ini_dir=/home/braed/chipyard-mx/generators/testchipip/src/main/resources/dramsim2_ini +max-cycles=200000000   +loadmem=/home/braed/chipyard-mx/generators/gemmini/software/gemmini-ro
+fp8 WS matmul test PASSED (no mismatches).
+b800fd68 NVFP4 FP32 mvout with the tensor scale via acc_scale (M6.3C)

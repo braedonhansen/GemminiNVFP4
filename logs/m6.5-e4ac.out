@@ -1,0 +1,20 @@
+== (a) flip bit 0 of out_bits[5][40] of nvfp4_mt_m32n96k64 (Spike)
+target token 0x40a149cau on line 374
+mutation applied (grep -c changed lines): 1  0x40a149cau -> 0x40a149cbu
+build_rc=0
+MISMATCH out[5][40]: got 0x40a149ca want 0x40a149cb
+nvfp4_mt_m32n96k64 M=32 K=64 N=96: 1 mismatches of 3072 outputs, 415 cycles (config + loads + matmul + mvout)
+spike_rc=1
+header restored (identical to repo)
+rebuild_rc=0
+nvfp4_mt_m32n96k64 M=32 K=64 N=96: 0 mismatches of 3072 outputs, 415 cycles (config + loads + matmul + mvout)
+spike_rc=0
+== (c) Spike model with the N-tile (j-group) offset of the FP32 store mutated, shape 1
+before: 1
+mutation applied: 1
+gcc_rc=1
+libs loaded:
+spike_rc=255
+== sanity: unmutated installed lib, same binary
+nvfp4_mt_m64n64k128 M=64 K=128 N=64: 0 mismatches of 4096 outputs, 550 cycles (config + loads + matmul + mvout)
+spike_rc=0

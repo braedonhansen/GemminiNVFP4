@@ -1,0 +1,6 @@
+2026-10-20 | E1 | PASS | export_e2e.py takes M N K seed; nvfp4_e2e_mnk.c + 4 wrappers; pytest 145 passed; default/s2/s3 + 4 new headers regenerate byte-identically (refmodel/tests/test_export_e2e.py); capacity asserts in C
+2026-10-20 | E2 | PASS | Spike gemmini_nvfp4: 0/4096, 0/3072, 0/3072, 0/4096, rc 0 (logs/m6.5-e2.out)
+2026-10-20 | E3 | PASS | Verilator NvFp4GemminiRocketConfig: 0 mismatches each; cycles 8285, 5732, 9831, 17875 (logs/m6.5-e3.out)
+2026-10-20 | E4 | PASS | (a) 1 mismatch (Spike); (b) RTL j-group stride mutated (grep -c 1): 3008 mismatches, restored by git checkout + rebuild: 0; (c) Spike model index mutated (grep -c 1, LD_DEBUG shows lib): 3968 mismatches (logs/m6.5-e4ac.out, m6.5-e4b.out, m6.5-e4c.out)
+2026-10-20 | E5 | PASS | Spike fp4_64x64, 128x128, 64x64_requant, 128x128_requant PASSED; Verilator MxFp4Only fp4_64x64 PASSED (logs/m6.5-e5spike.out, m6.5-e5rtl.out)
+2026-10-20 | E6 | PASS | docs/M6.5-results.md

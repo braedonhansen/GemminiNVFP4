@@ -17,11 +17,12 @@ import numpy as np
 from quant import quantize, BLOCK
 from hw_dot import hw_matmul_v0, block_sums
 
-M, K, N = 32, 64, 32
+M, K, N = 32, 64, 32      # default shape (M6.3C); export(path, seed, m, n, k) takes any M, N multiple of 32 and K multiple of 16
 SEED = 20261018
 
 
-def make_case(seed=SEED):
+def make_case(seed=SEED, M=M, N=N, K=K):
+    assert M % 32 == 0 and N % 32 == 0 and K % BLOCK == 0, "M, N must be multiples of 32 (quad tiles), K of 16"
     rng = np.random.default_rng(seed)
     nb = K // BLOCK
 
@@ -30,13 +31,27 @@ def make_case(seed=SEED):
         return x.reshape(rows, K)
 
     qa, qb = quantize(gen(M)), quantize(gen(N))
-    # corner scale codes (E4M3 code 0 = zero, 1..7 = subnormal); the model decodes whatever codes it is given
-    qa.scales[3, :] = 0x00      # row 3, every block: zero scale -> every block of row 3 is +-0 (isum < 0 gives -0)
-    qa.scales[7, 2] = 0x03      # subnormal
-    qa.scales[20, 1] = 0x00
-    qb.scales[5, 0] = 0x00      # column 5, block 0
-    qb.scales[11, 3] = 0x07
-    qb.scales[30, 1] = 0x01
+    # corner scale codes (E4M3 code 0 = zero, 1..7 = subnormal); the model decodes whatever codes it is given.
+    # The same pattern is repeated in every 32-row / 32-column tile (offset 32*t), block indices wrap modulo K/16;
+    # for the default 32x32x64 case this is exactly the original six assignments.
+    for t in range(M // 32):
+        o = 32 * t
+        qa.scales[o + 3, :] = 0x00          # one row per tile, every block: zero scale -> every block is +-0 (isum < 0 gives -0)
+        qa.scales[o + 7, 2 % nb] = 0x03     # subnormal
+        qa.scales[o + 20, 1 % nb] = 0x00
+    for t in range(N // 32):
+        o = 32 * t
+        qb.scales[o + 5, 0] = 0x00          # column 5 of the tile, block 0
+        qb.scales[o + 11, 3 % nb] = 0x07
+        qb.scales[o + 30, 1 % nb] = 0x01
+    if (M, N, K) != (32, 32, 64):
+        # multi-tile / long-K cases: random data rarely keeps the sign negative over ALL blocks, so force outputs that
+        # are -0 without the "+0 + blk" first write: zero-scale A row 32t+3 holds -1.0 (code 0xA), B column 32u+13 holds
+        # +1.0 (code 0x2) -> every block sum is negative, every block is -0, the unfixed datapath would give -0.
+        for t in range(M // 32):
+            qa.codes[32 * t + 3, :] = 0xA
+        for u in range(N // 32):
+            qb.codes[32 * u + 13, :] = 0x2
     return qa, qb
 
 
@@ -49,8 +64,8 @@ def _fmt(vals, per_line, fn):
     return "\n".join("    " + ", ".join(fn(v) for v in vals[i:i + per_line]) + "," for i in range(0, len(vals), per_line))
 
 
-def build(seed=SEED):
-    qa, qb = make_case(seed)
+def build(seed=SEED, M=M, N=N, K=K):
+    qa, qb = make_case(seed, M, N, K)
     sums, out = hw_matmul_v0(qa, qb)
     ca, cb = qa.codes.astype(np.uint8), qb.codes.astype(np.uint8)   # (M, K), (N, K)
     a_hw = ((ca[1::2, :] << 4) | ca[0::2, :]).astype(np.uint8)       # [M/2][K]
@@ -60,8 +75,8 @@ def build(seed=SEED):
     return qa, qb, sums, out, a_hw, b_hw, a_sc, b_sc
 
 
-def export(path, seed=SEED):
-    qa, qb, sums, out, a_hw, b_hw, a_sc, b_sc = build(seed)
+def export(path, seed=SEED, M=M, N=N, K=K):
+    qa, qb, sums, out, a_hw, b_hw, a_sc, b_sc = build(seed, M, N, K)
     from formats import e4m3_decode
     sa0 = e4m3_decode(qa.scales[:, 0]).astype(np.float32)
     sb0 = e4m3_decode(qb.scales[:, 0]).astype(np.float32)
@@ -99,9 +114,14 @@ def export(path, seed=SEED):
         "#endif", "",
     ]
     Path(path).write_text("\n".join(lines), newline="\n")
-    print(f"wrote {path}: first-block -0 count {neg0}, outputs sensitive to the -0 fix {sens}, {int(np.sum(out == 0))} zero outputs, "
+    if (M, N, K) != (32, 32, 64):
+        assert sens > 0, "case has no output sensitive to the -0 fix"
+    print(f"wrote {path} (M={M} N={N} K={K} seed={seed}): first-block -0 count {neg0}, outputs sensitive to the -0 fix {sens}, {int(np.sum(out == 0))} zero outputs, "
           f"out range [{out.min():.4g}, {out.max():.4g}], factor {float(fac):.6g}")
 
 
 if __name__ == "__main__":
-    export(sys.argv[1] if len(sys.argv) > 1 else "hw/tests/nvfp4_e2e_data.h", int(sys.argv[2]) if len(sys.argv) > 2 else SEED)
+    # usage: export_e2e.py [path [seed [M N K]]]
+    a = sys.argv
+    shape = tuple(int(v) for v in a[3:6]) if len(a) >= 6 else (M, N, K)
+    export(a[1] if len(a) > 1 else "hw/tests/nvfp4_e2e_data.h", int(a[2]) if len(a) > 2 else SEED, *shape)

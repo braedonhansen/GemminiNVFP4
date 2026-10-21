@@ -1,0 +1,4 @@
+nvfp4_mt_m64n64k128 spike rc=0 | 0 mismatch lines | nvfp4_mt_m64n64k128 M=64 K=128 N=64: 0 mismatches of 4096 outputs, 550 cycles (config + loads + matmul + mvout)
+nvfp4_mt_m32n96k64 spike rc=0 | 0 mismatch lines | nvfp4_mt_m32n96k64 M=32 K=64 N=96: 0 mismatches of 3072 outputs, 415 cycles (config + loads + matmul + mvout)
+nvfp4_mt_m96n32k256 spike rc=0 | 0 mismatch lines | nvfp4_mt_m96n32k256 M=96 K=256 N=32: 0 mismatches of 3072 outputs, 653 cycles (config + loads + matmul + mvout)
+nvfp4_mt_m64n64k512 spike rc=0 | 0 mismatch lines | nvfp4_mt_m64n64k512 M=64 K=512 N=64: 0 mismatches of 4096 outputs, 1008 cycles (config + loads + matmul + mvout)

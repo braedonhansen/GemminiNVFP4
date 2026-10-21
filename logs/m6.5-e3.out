@@ -1,0 +1,12 @@
+=== RTL nvfp4_mt_m64n64k128
+rc=0 secs=102
+nvfp4_mt_m64n64k128 M=64 K=128 N=64: 0 mismatches of 4096 outputs, 8285 cycles (config + loads + matmul + mvout)
+=== RTL nvfp4_mt_m32n96k64
+rc=0 secs=84
+nvfp4_mt_m32n96k64 M=32 K=64 N=96: 0 mismatches of 3072 outputs, 5732 cycles (config + loads + matmul + mvout)
+=== RTL nvfp4_mt_m96n32k256
+rc=0 secs=94
+nvfp4_mt_m96n32k256 M=96 K=256 N=32: 0 mismatches of 3072 outputs, 9831 cycles (config + loads + matmul + mvout)
+=== RTL nvfp4_mt_m64n64k512
+rc=0 secs=112
+nvfp4_mt_m64n64k512 M=64 K=512 N=64: 0 mismatches of 4096 outputs, 17875 cycles (config + loads + matmul + mvout)
