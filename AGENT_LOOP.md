@@ -14,7 +14,7 @@ Each handoff states:
 For each step:
 1. **Pre-check**: if the step's check already passes, skip it (makes reruns idempotent and resumable)
 2. **Run** with a timeout. Send long-running output to a log file under `logs/` (or `~/nvfp4-logs/` in WSL) and keep only the tail in context.
-3. **Verify** with the step's check command. A zero exit code alone doesn't count; the check has to show the expected artifact or output.
+3. **Verify** with the step's check command. A check must also **fail when it checked nothing**: missing or empty input, or 0 vectors run, is a failure, not a pass. Print the count of what was checked. A zero exit code alone doesn't count; the check has to show the expected artifact or output.
 4. **Checkpoint**: append a line to the task's step log (`logs/<task>.steps`): `timestamp | step | PASS/FAIL | evidence`
 
 ## 3. On failure

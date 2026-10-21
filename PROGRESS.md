@@ -27,7 +27,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
   - [x] 6.1 PE multiplier: synthesis experiment (LUT / case / generic `*` / shift-mux / sign-folded / shared-decode), winner built in Chisel with an exhaustive test. Brief: [briefs/M6.1-pe-multiplier-synthesis.md](briefs/M6.1-pe-multiplier-synthesis.md)
   - [x] 6.2 (Phase A) Exact integer column accumulation: standalone NvFp4Mesh verified + integration plan ([docs/M6.2-integration-plan.md](docs/M6.2-integration-plan.md))
   - [x] 6.3 Scale stage + FP32 acc + 16-element blocks + tensor scale: Phase A (standalone), B (integration), C (-0 fix, FP32 mvout + acc_scale, first e2e RTL matmul), all coordinator-verified
-  - [ ] 6.4 libgemmini Spike mirror
+  - [x] 6.4 libgemmini Spike mirror: `libgemmini_nvfp4.so` (spike --extension=gemmini_nvfp4), bit-exact; Spike and RTL agree on 3 cases
   - [ ] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator
 - [ ] M7: Longer K, performance measurement vs. MX baseline.
 - [ ] Later: update the site write-up for the MX-base pivot; publish this repo (LICENSE + README + notices)
@@ -36,8 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.4 running: [briefs/M6.4-spike-nvfp4.md](briefs/M6.4-spike-nvfp4.md), the libgemmini NVFP4 build (local branch nvfp4), nvfp4_e2e in Spike, and Spike-vs-RTL on 2 new cases.
-2. M6.5: end-to-end in Spike + Verilator incl. multi-tile (M,N > 32) and longer K; tile_latency choice.
+1. M6.5: end-to-end in Spike + Verilator incl. multi-tile (M,N > 32) and longer K; tile_latency choice.
 3. Deferred (default): direct accumulator-to-DRAM FP32 mvout (software route via spad works; needs a 2-request split in the Scratchpad writer); serialising the 32-lane mvout multiplier; bias via acc mvin; adder split rebalance.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
@@ -70,6 +69,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 ### 2026-10-20 (M6.4)
 - M6.4 run (subagent, not ticked): NVFP4 bit-exact model in Spike. libgemmini local branch `nvfp4` (never pushed): `e9a95f6`, `03f8eea` on 87663107 (patch: logs/m6.4-libgemmini.patch). `-DGEMMINI_NVFP4` builds `libgemmini_nvfp4.so` (extension `gemmini_nvfp4`, `spike --extension=gemmini_nvfp4`), installed with the default libs into ~/chipyard-mx $RISCV/lib. Host unit check: 493,216 scale vectors + 12,000 acc sequences 0 mismatches (control 532). `nvfp4_e2e` in Spike: 0/1024; flipped value 1 mismatch; -0 fix reverted 3 mismatches. D5: two new seeds (20261020, 20261021, hw/tests/nvfp4_e2e_s2/s3): Spike 0/1024 and Verilator 0/1024 each. D6: MX FP4 64x64/_requant/etc. PASS with logs identical to the old lib; default/DIM32/DIM8 preprocess identically (byte-identical .so is not reproducible even from unchanged source). Not modelled: ReLU on FP32, direct acc->DRAM store, multi-tile layouts, perf model. Details: docs/M6.4-spike-plan.md, logs/m6.4.steps.
 ### 2026-10-20
+- M6.4 DONE (coordinator verified): libgemmini branch nvfp4 (e9a95f6, 03f8eea); s2/s3 headers regenerate identically from refmodel; nvfp4_unit 493,216 scale vectors + 12,000 acc seqs 0 mismatches; Spike (gemmini_nvfp4) 0/1024 on nvfp4_e2e, s2, s3; Verilator s3 0/1024 (2,555 cycles); MX default lib still PASSES. **Found + fixed:** nvfp4_unit printed PASS when its vector files were missing (0 vectors checked). Now it fails (9555cda, both directions proven). Added an AGENT_LOOP rule: a check must fail when it checked nothing.
 - M6.3 DONE (Phase C coordinator-verified): e2e header regenerates byte-identically from refmodel/export_e2e.py; pytest 134; standalone suite 12/12; **nvfp4_e2e (M=N=32, K=64) in Verilator: 0 mismatches of 1024 FP32 output bit patterns, 2,555 cycles** (coordinator rerun); MX FP4 Spike still PASSES. Branch nvfp4: 631d0110, ee5991cd, 036e07f5, b800fd68.
 ### 2026-10-18
 - M6.3 Phase C run (subagent, not ticked): -0 fix (first write = +0 + blk through the adder), FP32 mvout with the tensor scale via acc_scale (2-stage hardfloat Fp32Mul on all 32 lanes in AccumulatorScale; spad-store address math doubled for FP32), and the first end-to-end NVFP4 matmul in RTL. Branch `nvfp4` commits `036e07f5`, `b800fd68` (local). Standalone: 12/12 specs, accumulate pipe 12,000 sequences with 0 exclusions bit-exact (control 532 mismatches), Fp32Mul2 400,361 products bit-exact vs JVM (control 168,336). `nvfp4_e2e` (M=N=32, K=64) in Verilator: 0 mismatches of 1024 output bit patterns, 2555 cycles; flipped expected bit gives exactly 1 mismatch; with the -0 fix reverted in RTL exactly 3 mismatches. MX Verilog identical (725 modules, modulo source-line annotations); MX FP4 64x64 passes in Spike and Verilator. Open: direct acc->DRAM FP32 store (64 B writer limit), Spike model (M6.4), multi-tile e2e. Details: docs/M6.3C-integration.md, logs/m6.3c.steps.
