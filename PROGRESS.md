@@ -26,7 +26,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
   - [x] 6.0 Design review: D1-D7 decided
   - [x] 6.1 PE multiplier: synthesis experiment (LUT / case / generic `*` / shift-mux / sign-folded / shared-decode), winner built in Chisel with an exhaustive test. Brief: [briefs/M6.1-pe-multiplier-synthesis.md](briefs/M6.1-pe-multiplier-synthesis.md)
   - [x] 6.2 (Phase A) Exact integer column accumulation: standalone NvFp4Mesh verified + integration plan ([docs/M6.2-integration-plan.md](docs/M6.2-integration-plan.md))
-  - [ ] 6.3 (Phase A done 10-17; Phase B integrated + verified 10-18; FP32 mvout + tensor scale still open) E4M3 scale stage + FP32 acc + 16-element blocks + tensor scale
+  - [x] 6.3 Scale stage + FP32 acc + 16-element blocks + tensor scale: Phase A (standalone), B (integration), C (-0 fix, FP32 mvout + acc_scale, first e2e RTL matmul), all coordinator-verified
   - [ ] 6.4 libgemmini Spike mirror
   - [ ] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator
 - [ ] M7: Longer K, performance measurement vs. MX baseline.
@@ -36,7 +36,9 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.3 Phase C running (brief section "Phase C"): FP32 mvout + tensor scale via acc_scale (D4/D6), currently missing (MxRequantizer/DMA assume 16-bit lanes; AccumulatorScale's MX branch ignores acc_scale).
+1. M6.4: Spike/libgemmini NVFP4 model (build define, `libgemmini_nvfp4`), bit-exact vs the refmodel; then the nvfp4_e2e test must pass in Spike too.
+2. M6.5: end-to-end in Spike + Verilator incl. multi-tile (M,N > 32) and longer K; tile_latency choice.
+3. Deferred (default): direct accumulator-to-DRAM FP32 mvout (software route via spad works; needs a 2-request split in the Scratchpad writer); serialising the 32-lane mvout multiplier; bias via acc mvin; adder split rebalance.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
 
@@ -65,6 +67,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 
 ## Session log
+### 2026-10-20
+- M6.3 DONE (Phase C coordinator-verified): e2e header regenerates byte-identically from refmodel/export_e2e.py; pytest 134; standalone suite 12/12; **nvfp4_e2e (M=N=32, K=64) in Verilator: 0 mismatches of 1024 FP32 output bit patterns, 2,555 cycles** (coordinator rerun); MX FP4 Spike still PASSES. Branch nvfp4: 631d0110, ee5991cd, 036e07f5, b800fd68.
 ### 2026-10-18
 - M6.3 Phase C run (subagent, not ticked): -0 fix (first write = +0 + blk through the adder), FP32 mvout with the tensor scale via acc_scale (2-stage hardfloat Fp32Mul on all 32 lanes in AccumulatorScale; spad-store address math doubled for FP32), and the first end-to-end NVFP4 matmul in RTL. Branch `nvfp4` commits `036e07f5`, `b800fd68` (local). Standalone: 12/12 specs, accumulate pipe 12,000 sequences with 0 exclusions bit-exact (control 532 mismatches), Fp32Mul2 400,361 products bit-exact vs JVM (control 168,336). `nvfp4_e2e` (M=N=32, K=64) in Verilator: 0 mismatches of 1024 output bit patterns, 2555 cycles; flipped expected bit gives exactly 1 mismatch; with the -0 fix reverted in RTL exactly 3 mismatches. MX Verilog identical (725 modules, modulo source-line annotations); MX FP4 64x64 passes in Spike and Verilator. Open: direct acc->DRAM FP32 store (64 B writer limit), Spike model (M6.4), multi-tile e2e. Details: docs/M6.3C-integration.md, logs/m6.3c.steps.
 - M6.3 Phase B verified by the coordinator: branch `nvfp4` (631d0110, ee5991cd) sits on 266c593f; ported components identical to the verified standalone ones; standalone suite 11/11; MX FP4 64x64 still PASSES from the branch in Spike + Verilator; NVFP4 sim built. The agent's numeric RTL check (256 acc writes, 16,384 FP32 values exact, wrong-K-block control fails) used temporary debug code, so it's not independently re-runnable. M6.5's end-to-end test will cover it. Open: FP32 mvout + tensor scale; -0 corner; has_acc_mvin=false; unbalanced adder split (210/80).
