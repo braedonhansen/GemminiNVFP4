@@ -1,0 +1,11 @@
+2026-10-18 | C0 -0 fix in NvFp4RmwPipe (standalone) | PASS | full suite 12/12 (logs m6.3a-work s7_c0main); NvFp4RmwPipe sequences=12000 (skipped -0-first: 0; 471 previously excluded now included) writes=15892 lane-values=127136 stalls=11418 mismatches=0
+2026-10-18 | C0 negative control (forced old-row operand -0 instead of +0, grep -c 1 -> 1) | PASS | NvFp4RmwPipe 532 mismatches (Fp32AccAdd2 test still 0)
+2026-10-18 | C0 port to branch | PASS | logs/m6.3c-portdiff.sh: NvFp4RmwPipe IDENTICAL; branch commit 036e07f5
+2026-10-18 | C1 Fp32Mul2 (hardfloat MulRawFN + RoundRawFNToRecFN, 2 stages) vs JVM float multiply | PASS | 400,361 checks (random, subnormal/underflow, near-overflow, zero, inf, NaN), 0 mismatches
+2026-10-18 | C1 negative control (roundingMode 0 -> 1, grep -c 1 -> 1) | PASS | 168,336 mismatches
+2026-10-18 | C2 branch: FP32 mvout + acc_scale tensor scale; both configs elaborate | PASS | NvFp4GemminiRocketConfig make verilog rc 0 (184 s), MxFp4Only rc 0 (73 s); MX Verilog 725 modules identical after stripping source-line annotations (logs/m6.3c-mxnorm.sh); branch commit b800fd68
+2026-10-18 | C2 NVFP4 simulator build | PASS | Verilator-only build 161 s, peak 2.25 GB sampled
+2026-10-18 | C3 nvfp4_e2e, Verilator, M=N=32 K=64 | PASS | 0 mismatches of 1024 output bit patterns, exit 0, 2555 cycles
+2026-10-18 | C3 negative control (flip 1 bit of out_bits[5][7] in installed header) | PASS | exactly 1 mismatch, exit nonzero; restored: 0 mismatches
+2026-10-18 | C3 system-level -0 control (branch adder operand forced -0, rebuilt, grep -c 1) | PASS | 3 mismatches out[3][15,18,26] got 0x80000000 want 0 (exactly the 3 outputs the exporter predicts); restored + rebuilt: 0 mismatches
+2026-10-18 | C4 MX regression from branch | PASS | MX sim rebuilt 296 s peak 3.3 GB sampled; matmul_tiled_fp4_64x64 Spike PASSED rc 0, Verilator PASSED rc 0 (84 s)

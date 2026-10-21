@@ -11,8 +11,9 @@ import chisel3.util._
   *   t+1    : pw(0) valid; scale bytes (sa per entry, sb per lane) arrive; scale-stage stage 0 starts
   *   t+3    : pw(ScaleLat-1) valid; SRAM read of the OLD accumulator row is issued (rd_en/rd_addr) if acc
   *   t+4    : scale-stage output (exact FP32 block value) and SRAM read data meet at the adder inputs
-  *   t+6    : adder output (2 stages); pw(L-1), L = 1+ScaleLat+AddLat = 6, is valid; the row (sum, or the block value for a
-  *            non-acc write) is written to the SRAM (wr_*).
+  *   t+6    : adder output (2 stages); pw(L-1), L = 1+ScaleLat+AddLat = 6, is valid; the row is written to the SRAM (wr_*).
+  *            A non-acc write (first write of a pass) goes through the adder too with the old-row operand forced to +0
+  *            (+0 + blk, M6.3C), so it matches the refmodel's float32 order bit for bit even when blk is -0.
   *
   * Read-after-write hazard, resolved by STALL (not forwarding): an accumulate to address A whose SRAM read (cycle
   * t2+ScaleLat) happens before an earlier write to A is in the SRAM (visible from cycle t1+L+1) would read stale data.
@@ -70,8 +71,10 @@ class NvFp4RmwPipe(val entries: Int, val lanes: Int = 4, val addrW: Int = 8, val
 
   // ---- datapath ----
   val d0 = RegNext(io.data)
-  val blkOut = Wire(Vec(entries, Vec(lanes, UInt(32.W))))
   val sumOut = Wire(Vec(entries, Vec(lanes, UInt(32.W))))
+  // M6.3C -0 fix: the first write of a pass (acc = false) also goes through the adder, as +0 + blk, so a -0 block becomes +0
+  // (IEEE RNE: -0 + +0 = +0), the refmodel's bits. The adder inputs meet in the cycle pw(ScaleLat) is valid.
+  val accAtAdder = pw(ScaleLat).acc
   for (e <- 0 until entries) {
     val st = Module(new NvFp4ScaleStage(lanes))
     st.io.in_valid := pwV(0)
@@ -80,9 +83,8 @@ class NvFp4RmwPipe(val entries: Int, val lanes: Int = 4, val addrW: Int = 8, val
       st.io.sa(j) := io.sa(e)(j)
       st.io.sb(j) := io.sb(e)(j)
       val add = Module(new Fp32AccAdd2)
-      add.io.acc := io.rd_data(e)(32 * j + 31, 32 * j)
+      add.io.acc := Mux(accAtAdder, io.rd_data(e)(32 * j + 31, 32 * j), 0.U(32.W))
       add.io.blk := st.io.out(j)
-      blkOut(e)(j) := ShiftRegister(st.io.out(j), AddLat)
       sumOut(e)(j) := add.io.sum
     }
   }
@@ -92,7 +94,7 @@ class NvFp4RmwPipe(val entries: Int, val lanes: Int = 4, val addrW: Int = 8, val
   io.wr_meta := oldest.meta
   io.wr_acc := oldest.acc
   for (e <- 0 until entries)
-    io.wr_data(e) := Mux(oldest.acc, sumOut(e).asUInt, blkOut(e).asUInt)
+    io.wr_data(e) := sumOut(e).asUInt
 }
 
 /** Standalone test wrapper: NvFp4RmwPipe + a flop-array SRAM (depth rows of entries*lanes*32 bits) with a debug read port. */

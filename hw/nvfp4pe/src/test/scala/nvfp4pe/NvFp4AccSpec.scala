@@ -84,11 +84,9 @@ class NvFp4AccSpec extends AnyFunSuite {
       if (l == "S") seqs += mutable.ArrayBuffer[V]()
       else { val f = l.split(' '); seqs.last += V(f(0).toInt, f(1).toInt, f(2).toInt, hex(f(3))) }
     }
-    // The first block of a pass is stored directly (acc = false) while the refmodel computes +0 + blk; they differ only
-    // when blk is -0 (isum == 0 and a negative scale sign), which NVFP4 scales never produce. Skip (and count) those.
-    def negZeroFirst(s: mutable.ArrayBuffer[V]) = { val h = s.head; val zero = h.isum == 0 || (h.sa & 0x7f) == 0 || (h.sb & 0x7f) == 0; val nan = (h.sa & 0x7f) == 0x7f || (h.sb & 0x7f) == 0x7f; !nan && zero && (((h.isum < 0) ^ ((h.sa ^ h.sb) & 0x80) != 0)) }
-    val skipped = seqs.count(negZeroFirst)
-    val usable = seqs.filterNot(negZeroFirst)
+    // M6.3C: the first block of a pass also goes through the adder (+0 + blk), so there are no exclusions: -0-first sequences included.
+    val skipped = 0
+    val usable = seqs
     val Entries = 2; val Lanes = 4; val PerRow = Entries * Lanes
     // group PerRow sequences of equal length per row
     val groups = usable.groupBy(_.length).toSeq.sortBy(_._1).flatMap { case (_, ss) =>
