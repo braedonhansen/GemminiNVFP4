@@ -36,7 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.5 PAUSED at the user's request until after midnight (the update should go out Oct 21). Restart scheduled for 12:07am Oct 21, session-only. If this session isn't running then, dispatch it by hand: [briefs/M6.5-e2e-multitile.md](briefs/M6.5-e2e-multitile.md). 4 multi-tile / long-K shapes bit-exact in Spike + Verilator, with layout negative controls. tile_latency stays 1 (MX default) unless timing data says otherwise.
+1. M6.5 running (restarted 2026-10-20 21:31 after a reboot): [briefs/M6.5-e2e-multitile.md](briefs/M6.5-e2e-multitile.md). Site update held until after midnight (dated Oct 21), with a session-only trigger at 12:07am.
 3. Deferred (default): direct accumulator-to-DRAM FP32 mvout (software route via spad works; needs a 2-request split in the Scratchpad writer); serialising the 32-lane mvout multiplier; bias via acc mvin; adder split rebalance.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
