@@ -1,0 +1,19 @@
+== (a) flip bit 0 of out_bits[5][7]
+target token 0xc0073050u on line 185
+mutation applied (diff lines): 1  0xc0073050u -> 0xc0073051u
+build_rc=0
+MISMATCH out[5][7]: got 0xc0073050 want 0xc0073051
+nvfp4_e2e M=32 K=64 N=32: 1 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+spike_rc=1
+header restored (identical to repo)
+rebuild_rc=0
+nvfp4_e2e M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+spike_rc=0
+== (b) model with the -0 fix reverted
+before: 1
+mutation applied: 1
+gcc_rc=0
+      1811:	find library=libgemmini_nvfp4.so [0]; searching
+      1811:	  trying file=/home/braed/chipyard-mx/.conda-env/riscv-tools/lib/libgemmini_nvfp4.so
+nvfp4_e2e M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+spike_rc=0

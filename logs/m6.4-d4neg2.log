@@ -1,0 +1,10 @@
+libs loaded:
+      1878:	calling init: /home/braed/nvfp4-logs/neg/libgemmini_nvfp4.so
+MISMATCH out[3][15]: got 0x80000000 want 0x00000000
+MISMATCH out[3][18]: got 0x80000000 want 0x00000000
+MISMATCH out[3][26]: got 0x80000000 want 0x00000000
+nvfp4_e2e M=32 K=64 N=32: 3 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+spike_rc=1
+== sanity: --extlib with the installed lib
+nvfp4_e2e M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+spike_rc=0

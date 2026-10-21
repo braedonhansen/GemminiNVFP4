@@ -67,6 +67,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 
 ## Session log
+### 2026-10-20 (M6.4)
+- M6.4 run (subagent, not ticked): NVFP4 bit-exact model in Spike. libgemmini local branch `nvfp4` (never pushed): `e9a95f6`, `03f8eea` on 87663107 (patch: logs/m6.4-libgemmini.patch). `-DGEMMINI_NVFP4` builds `libgemmini_nvfp4.so` (extension `gemmini_nvfp4`, `spike --extension=gemmini_nvfp4`), installed with the default libs into ~/chipyard-mx $RISCV/lib. Host unit check: 493,216 scale vectors + 12,000 acc sequences 0 mismatches (control 532). `nvfp4_e2e` in Spike: 0/1024; flipped value 1 mismatch; -0 fix reverted 3 mismatches. D5: two new seeds (20261020, 20261021, hw/tests/nvfp4_e2e_s2/s3): Spike 0/1024 and Verilator 0/1024 each. D6: MX FP4 64x64/_requant/etc. PASS with logs identical to the old lib; default/DIM32/DIM8 preprocess identically (byte-identical .so is not reproducible even from unchanged source). Not modelled: ReLU on FP32, direct acc->DRAM store, multi-tile layouts, perf model. Details: docs/M6.4-spike-plan.md, logs/m6.4.steps.
 ### 2026-10-20
 - M6.3 DONE (Phase C coordinator-verified): e2e header regenerates byte-identically from refmodel/export_e2e.py; pytest 134; standalone suite 12/12; **nvfp4_e2e (M=N=32, K=64) in Verilator: 0 mismatches of 1024 FP32 output bit patterns, 2,555 cycles** (coordinator rerun); MX FP4 Spike still PASSES. Branch nvfp4: 631d0110, ee5991cd, 036e07f5, b800fd68.
 ### 2026-10-18

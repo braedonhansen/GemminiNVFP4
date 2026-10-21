@@ -1,0 +1,22 @@
+-rwxr-xr-x 1 braed braed 21969944 Oct 20 17:53 /home/braed/chipyard-mx/sims/verilator/simulator-chipyard.harness-NvFp4GemminiRocketConfig
+=== RTL nvfp4_e2e_s2
+rc=0 secs=56
+if [ "/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e_s2-baremetal" != "none" ] && [ ! -f "/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/n
+	+dramsim +dramsim_ini_dir=/home/braed/chipyard-mx/generators/testchipip/src/main/resources/dramsim2_ini +max-cycles=200000000   +loadmem=/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e_s2-b
+	/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e_s2-baremetal \
+	</dev/null 2> >(spike-dasm > /home/braed/chipyard-mx/sims/verilator/output/chipyard.harness.TestHarness.NvFp4GemminiRocketConfig/nvfp4_e2e_s2-baremetal.out) | tee /home/braed/chipyard-mx/sims/verilator/output/chipyard.harness.TestHarness.NvFp4Gemmin
+nvfp4_e2e_s2 M=32 K=64 N=32: 0 mismatches of 1024 outputs, 2555 cycles (config + loads + matmul + mvout)
+=== RTL nvfp4_e2e_s3
+rc=0 secs=60
+if [ "/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e_s3-baremetal" != "none" ] && [ ! -f "/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/n
+	+dramsim +dramsim_ini_dir=/home/braed/chipyard-mx/generators/testchipip/src/main/resources/dramsim2_ini +max-cycles=200000000   +loadmem=/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e_s3-b
+	/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e_s3-baremetal \
+	</dev/null 2> >(spike-dasm > /home/braed/chipyard-mx/sims/verilator/output/chipyard.harness.TestHarness.NvFp4GemminiRocketConfig/nvfp4_e2e_s3-baremetal.out) | tee /home/braed/chipyard-mx/sims/verilator/output/chipyard.harness.TestHarness.NvFp4Gemmin
+nvfp4_e2e_s3 M=32 K=64 N=32: 0 mismatches of 1024 outputs, 2555 cycles (config + loads + matmul + mvout)
+=== RTL nvfp4_e2e
+rc=0 secs=60
+if [ "/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e-baremetal" != "none" ] && [ ! -f "/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp
+	+dramsim +dramsim_ini_dir=/home/braed/chipyard-mx/generators/testchipip/src/main/resources/dramsim2_ini +max-cycles=200000000   +loadmem=/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e-bare
+	/home/braed/chipyard-mx/generators/gemmini/software/gemmini-rocc-tests/build_mx_rocket/bareMetalC/nvfp4_e2e-baremetal \
+	</dev/null 2> >(spike-dasm > /home/braed/chipyard-mx/sims/verilator/output/chipyard.harness.TestHarness.NvFp4GemminiRocketConfig/nvfp4_e2e-baremetal.out) | tee /home/braed/chipyard-mx/sims/verilator/output/chipyard.harness.TestHarness.NvFp4GemminiRo
+nvfp4_e2e M=32 K=64 N=32: 0 mismatches of 1024 outputs, 2555 cycles (config + loads + matmul + mvout)

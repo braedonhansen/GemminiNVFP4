@@ -1,0 +1,22 @@
+Running with RISCV=/home/braed/chipyard-mx/.conda-env/riscv-tools
+g++ -ffp-contract=off -std=c++17 -O2 -o nvfp4_unit nvfp4_unit.cc
+== D3 pass run
+scale_stage: 493216 vectors, 0 mismatches
+acc_seq: 12000 sequences, 126618 blocks, 0 mismatches
+nvfp4_unit: PASS
+rc=0
+== D3 negative control: first write stores blk directly (no +0 + blk)
+before: 1
+after (mutation applied): 1
+scale_stage: 493216 vectors, 0 mismatches
+ACC MISMATCH seq 35 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 57 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 139 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 181 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 191 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 251 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 259 block 0 got 80000000 want 00000000
+ACC MISMATCH seq 263 block 0 got 80000000 want 00000000
+acc_seq: 12000 sequences, 126618 blocks, 532 mismatches
+nvfp4_unit: FAIL
+rc=1

@@ -1,0 +1,11 @@
+== default libgemmini.so (installed: e9a23528fbc6) vs pre-M6.4 library (md5 45cc49927f3f)
+matmul_tiled_fp4_64x64: new rc=0 [fp8 WS matmul test PASSED (no mismatches).]  base rc=0  logs_identical=yes
+matmul_tiled_fp4_64x64_requant: new rc=0 [fp8 WS matmul test PASSED (no mismatches).]  base rc=0  logs_identical=yes
+matmul_tiled_fp4_128x128_requant: new rc=0 [fp8 WS matmul test PASSED (no mismatches).]  base rc=0  logs_identical=yes
+matmul_tiled_fp4_64x64_chain: new rc=0 [fp4 chain test PASSED (MM1 resident + reused as MM2 operand, scales reused).]  base rc=0  logs_identical=yes
+matmul_tiled_fp4_64x64_DRAMMvout: new rc=0 [fp8 WS matmul test PASSED (no mismatches).]  base rc=0  logs_identical=yes
+fp4 WS requant test PASSED (no mismatches).
+== preprocessed gemmini.cc, default + DIM=32 + DIM=8, vs the pre-M6.4 source (assert line numbers normalised)
+variant '': 70037 lines, IDENTICAL
+variant '-DGEMMINI_DIM=32': 70037 lines, IDENTICAL
+variant '-DGEMMINI_DIM=8': 70034 lines, IDENTICAL

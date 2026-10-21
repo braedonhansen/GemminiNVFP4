@@ -1,0 +1,22 @@
+--- a/bareMetalC/Makefile
++++ b/bareMetalC/Makefile
++	nvfp4_e2e \
++	nvfp4_e2e_s2 \
++	nvfp4_e2e_s3 
+spikebuild_rc=0
+rocketbuild_rc=0
+-rwxr-xr-x 1 braed braed 25168 Oct 20 18:45 build_mx_rocket/bareMetalC/nvfp4_e2e-baremetal
+-rwxr-xr-x 1 braed braed 25176 Oct 20 18:46 build_mx_rocket/bareMetalC/nvfp4_e2e_s2-baremetal
+-rwxr-xr-x 1 braed braed 25176 Oct 20 18:46 build_mx_rocket/bareMetalC/nvfp4_e2e_s3-baremetal
+-rwxr-xr-x 1 braed braed 25168 Oct 20 18:44 build_spike/bareMetalC/nvfp4_e2e-baremetal
+-rwxr-xr-x 1 braed braed 25176 Oct 20 18:46 build_spike/bareMetalC/nvfp4_e2e_s2-baremetal
+-rwxr-xr-x 1 braed braed 25176 Oct 20 18:46 build_spike/bareMetalC/nvfp4_e2e_s3-baremetal
+-- spike nvfp4_e2e
+nvfp4_e2e M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+rc=0
+-- spike nvfp4_e2e_s2
+nvfp4_e2e_s2 M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+rc=0
+-- spike nvfp4_e2e_s3
+nvfp4_e2e_s3 M=32 K=64 N=32: 0 mismatches of 1024 outputs, 179 cycles (config + loads + matmul + mvout)
+rc=0
