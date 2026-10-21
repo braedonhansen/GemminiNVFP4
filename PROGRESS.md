@@ -36,8 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. Post the M6.5/M6 site update dated Oct 21 (held until after midnight at the user's request; trigger set for 12:07am), then update the report doc.
-2. M7: comparisons (accuracy, area, cycles: NVFP4 vs MX FP4), longer K and larger shapes; items not covered (non-multiple-of-32 M/N, scale-window cap 4096 B per loop call, bias, ReLU, direct acc-to-DRAM FP32 store).
+1. M7: comparisons (accuracy, area, cycles: NVFP4 vs MX FP4), longer K and larger shapes; items not covered (non-multiple-of-32 M/N, scale-window cap 4096 B per loop call, bias, ReLU, direct acc-to-DRAM FP32 store).
 3. Deferred (default): direct accumulator-to-DRAM FP32 mvout (software route via spad works; needs a 2-request split in the Scratchpad writer); serialising the 32-lane mvout multiplier; bias via acc mvin; adder split rebalance.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
@@ -67,6 +66,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 
 ## Session log
+### 2026-10-21
+- 00:07: posted the M6.5 site update dated Oct 21 (Portfolio `5daf423`, via a temporary worktree on origin/main; only gemmini-nvfp4.html; the user's own newer commit 2555c20 is preserved). Report doc updated with the M6.5 table and the M7 next step. The stale pre-restart trigger to re-dispatch M6.5 was ignored, since M6.5 was already done.
 ### 2026-10-20 (M6.5)
 - M6.5 run (subagent, not ticked, no RTL or model change needed): four multi-tile shapes (64x64x128, 32x96x64, 96x32x256, 64x64x512, K up to 512) are bit-exact against the refmodel in Spike (`gemmini_nvfp4`) and Verilator (`NvFp4GemminiRocketConfig`), 0 mismatches of 14,336 outputs, RTL 8,285 / 5,732 / 9,831 / 17,875 cycles, using the existing `gemmini_loop_ws_spad` loop (no software unrolling). New: `refmodel/export_e2e.py` takes M N K and a seed (old headers byte-identical), `hw/tests/nvfp4_e2e_mnk.c` + four `nvfp4_mt_*` wrappers, `refmodel/tests/test_export_e2e.py` (pytest 145). Controls: one flipped value gives 1 mismatch; RTL j-group stride mutated gives 3,008 mismatches, then 0 after `git checkout` and a rebuild; Spike model index mutated gives 3,968. MX regression passes (Spike fp4 64x64/128x128/requants, Verilator fp4_64x64). Details: docs/M6.5-results.md, logs/m6.5.steps.
 ### 2026-10-20 (M6.4)
