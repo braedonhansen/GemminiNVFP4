@@ -22,13 +22,13 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 - [x] M3: Scope defined in [docs/M3-scope.md](docs/M3-scope.md). First working version = v2.
 - [x] M4 (v0): NVFP4 in software on stock Gemmini: refmodel → C test → Spike + Verilator. Integer block sums bit-exact.
 - [x] M5: Bring up Berkeley's MX Gemmini (`ucb-bar/gemmini` branch `gemmini-mx-cleanup` @ `266c593f`, built on MxGen) in `~/chipyard-mx`; its FP4 tests pass in Spike + Verilator. Brief: [briefs/M5-mx-base-bringup.md](briefs/M5-mx-base-bringup.md)
-- [ ] M6: NVFP4 on the MX base. **First working version.** Split into checkpoints gated by design debates; see [docs/M6-design-debates.md](docs/M6-design-debates.md):
+- [x] M6: NVFP4 on the MX base (done 2026-10-20). **First working version.** Split into checkpoints gated by design debates; see [docs/M6-design-debates.md](docs/M6-design-debates.md):
   - [x] 6.0 Design review: D1-D7 decided
   - [x] 6.1 PE multiplier: synthesis experiment (LUT / case / generic `*` / shift-mux / sign-folded / shared-decode), winner built in Chisel with an exhaustive test. Brief: [briefs/M6.1-pe-multiplier-synthesis.md](briefs/M6.1-pe-multiplier-synthesis.md)
   - [x] 6.2 (Phase A) Exact integer column accumulation: standalone NvFp4Mesh verified + integration plan ([docs/M6.2-integration-plan.md](docs/M6.2-integration-plan.md))
   - [x] 6.3 Scale stage + FP32 acc + 16-element blocks + tensor scale: Phase A (standalone), B (integration), C (-0 fix, FP32 mvout + acc_scale, first e2e RTL matmul), all coordinator-verified
   - [x] 6.4 libgemmini Spike mirror: `libgemmini_nvfp4.so` (spike --extension=gemmini_nvfp4), bit-exact; Spike and RTL agree on 3 cases
-  - [ ] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator
+  - [x] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator: 4 multi-tile / long-K shapes, layout controls caught in RTL and Spike
 - [ ] M7: Longer K, performance measurement vs. MX baseline.
 - [ ] Later: update the site write-up for the MX-base pivot; publish this repo (LICENSE + README + notices)
 
@@ -36,7 +36,8 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.5 running (restarted 2026-10-20 21:31 after a reboot): [briefs/M6.5-e2e-multitile.md](briefs/M6.5-e2e-multitile.md). Site update held until after midnight (dated Oct 21), with a session-only trigger at 12:07am.
+1. Post the M6.5/M6 site update dated Oct 21 (held until after midnight at the user's request; trigger set for 12:07am), then update the report doc.
+2. M7: comparisons (accuracy, area, cycles: NVFP4 vs MX FP4), longer K and larger shapes; items not covered (non-multiple-of-32 M/N, scale-window cap 4096 B per loop call, bias, ReLU, direct acc-to-DRAM FP32 store).
 3. Deferred (default): direct accumulator-to-DRAM FP32 mvout (software route via spad works; needs a 2-request split in the Scratchpad writer); serialising the 32-lane mvout multiplier; bias via acc mvin; adder split rebalance.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
 3. Add LICENSE (BSD 3-Clause recommended) + README + notices before publishing this repo.
@@ -71,6 +72,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 ### 2026-10-20 (M6.4)
 - M6.4 run (subagent, not ticked): NVFP4 bit-exact model in Spike. libgemmini local branch `nvfp4` (never pushed): `e9a95f6`, `03f8eea` on 87663107 (patch: logs/m6.4-libgemmini.patch). `-DGEMMINI_NVFP4` builds `libgemmini_nvfp4.so` (extension `gemmini_nvfp4`, `spike --extension=gemmini_nvfp4`), installed with the default libs into ~/chipyard-mx $RISCV/lib. Host unit check: 493,216 scale vectors + 12,000 acc sequences 0 mismatches (control 532). `nvfp4_e2e` in Spike: 0/1024; flipped value 1 mismatch; -0 fix reverted 3 mismatches. D5: two new seeds (20261020, 20261021, hw/tests/nvfp4_e2e_s2/s3): Spike 0/1024 and Verilator 0/1024 each. D6: MX FP4 64x64/_requant/etc. PASS with logs identical to the old lib; default/DIM32/DIM8 preprocess identically (byte-identical .so is not reproducible even from unchanged source). Not modelled: ReLU on FP32, direct acc->DRAM store, multi-tile layouts, perf model. Details: docs/M6.4-spike-plan.md, logs/m6.4.steps.
 ### 2026-10-20
+- **M6.5 DONE, so M6 (first working version) DONE** (coordinator verified): pytest 145 (all 7 e2e headers regenerate byte-identically); Spike 0 mismatches on 64x64x128, 32x96x64, 96x32x256, 64x64x512; coordinator Verilator re-runs 64x64x512 (17,875 cycles) and 96x32x256 (9,831) give 0 mismatches. Agent: all 4 shapes bit-exact in Verilator too; RTL j-group stride mutation gives 3,008/4,096 mismatches, then restored to 0; Spike store-index mutation gives 3,968 mismatches; MX regression passes. No RTL/model fixes needed.
 - M6.5 dispatched, then stopped at the user's request (pause until midnight so the update is dated Oct 21). Checked: no partial changes, no running jobs.
 - M6.4 DONE (coordinator verified): libgemmini branch nvfp4 (e9a95f6, 03f8eea); s2/s3 headers regenerate identically from refmodel; nvfp4_unit 493,216 scale vectors + 12,000 acc seqs 0 mismatches; Spike (gemmini_nvfp4) 0/1024 on nvfp4_e2e, s2, s3; Verilator s3 0/1024 (2,555 cycles); MX default lib still PASSES. **Found + fixed:** nvfp4_unit printed PASS when its vector files were missing (0 vectors checked). Now it fails (9555cda, both directions proven). Added an AGENT_LOOP rule: a check must fail when it checked nothing.
 - M6.3 DONE (Phase C coordinator-verified): e2e header regenerates byte-identically from refmodel/export_e2e.py; pytest 134; standalone suite 12/12; **nvfp4_e2e (M=N=32, K=64) in Verilator: 0 mismatches of 1024 FP32 output bit patterns, 2,555 cycles** (coordinator rerun); MX FP4 Spike still PASSES. Branch nvfp4: 631d0110, ee5991cd, 036e07f5, b800fd68.
