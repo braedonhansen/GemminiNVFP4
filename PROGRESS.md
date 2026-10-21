@@ -36,7 +36,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
 Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-step execution with checks → bounded retries → escalate → structured report → the coordinator re-verifies before ticking a milestone. Briefs live in `briefs/`, step logs in `logs/`.
 
 ## Next steps
-1. M6.4: Spike/libgemmini NVFP4 model (build define, `libgemmini_nvfp4`), bit-exact vs the refmodel; then the nvfp4_e2e test must pass in Spike too.
+1. M6.4 running: [briefs/M6.4-spike-nvfp4.md](briefs/M6.4-spike-nvfp4.md), the libgemmini NVFP4 build (local branch nvfp4), nvfp4_e2e in Spike, and Spike-vs-RTL on 2 new cases.
 2. M6.5: end-to-end in Spike + Verilator incl. multi-tile (M,N > 32) and longer K; tile_latency choice.
 3. Deferred (default): direct accumulator-to-DRAM FP32 mvout (software route via spad works; needs a 2-request split in the Scratchpad writer); serialising the 32-lane mvout multiplier; bias via acc mvin; adder split rebalance.
 2. User: review the debates D2-D7 in docs/M6-design-debates.md (recommendations given). The old 'exactness' question is D2 there.
