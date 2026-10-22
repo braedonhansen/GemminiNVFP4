@@ -1,0 +1,4 @@
+factor bits 0x38111d02
+nvfp4_m7a_k2048 M=32 K=2048 N=32: 0 mismatches of 1024 outputs, 1559 cycles (config + loads + matmul + mvout)
+Gemmini extension configured with:
+    dim = 16

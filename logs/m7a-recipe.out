@@ -1,0 +1,8 @@
+matmul_fp8_64x64.h E4M3 A: per-32-block max |P| over blocks: min 1.000 median 1.438 max 2.000; fraction in [1,2]: 1.000, in [256,448]: 0.000
+   scale codes (e8m0) range 122 125 -> exponents -5 -2
+matmul_fp8_128x128.h E4M3 A: per-32-block max |P| over blocks: min 1.000 median 1.375 max 2.000; fraction in [1,2]: 1.000, in [256,448]: 0.000
+   scale codes (e8m0) range 117 124 -> exponents -10 -3
+matmul_fp4_64x64.h E2M1 A: block max |P| histogram {1.0: 40, 1.5: 61, 2.0: 27}
+   scale exps -3 -2
+matmul_fp4_128x128.h E2M1 A: block max |P| histogram {1.0: 200, 1.5: 228, 2.0: 84}
+   scale exps -3 0

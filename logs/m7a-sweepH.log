@@ -1,0 +1,14 @@
+control PASS: no-quantization n_compared=4096 max_abs=0.0 sqnr=inf; perturbed sqnr=138.3 dB
+  20/240 cells, 200 rows, 1 s
+  40/240 cells, 400 rows, 1 s
+  60/240 cells, 600 rows, 1 s
+  80/240 cells, 800 rows, 1 s
+  100/240 cells, 1000 rows, 2 s
+  120/240 cells, 1200 rows, 2 s
+  140/240 cells, 1400 rows, 5 s
+  160/240 cells, 1600 rows, 8 s
+  180/240 cells, 1800 rows, 21 s
+  200/240 cells, 2000 rows, 30 s
+  220/240 cells, 2200 rows, 112 s
+  240/240 cells, 2400 rows, 153 s
+wrote docs/m7a/accuracy_H.csv: 2400 rows (expected 2400 = 10 formats x 4 inputs x 6 K x 10 seeds); 0 cells with 0 compared; non-finite outputs in 240 rows

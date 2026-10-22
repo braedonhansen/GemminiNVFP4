@@ -1,0 +1,8 @@
+case 0 (M=64 N=64 K=1024): 0 mismatches of 4096
+case 1 (M=48 N=32 K=2048): 0 mismatches of 1536
+case 2 (M=64 N=64 K=4096): 0 mismatches of 4096
+case 3 (M=32 N=64 K=1024): 0 mismatches of 2048
+case 4 (M=16 N=16 K=16384): 0 mismatches of 256
+m7a_int8: 5 cases, 0 mismatches of 12032 outputs
+Gemmini extension configured with:
+    dim = 16

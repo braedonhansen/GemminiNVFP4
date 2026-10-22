@@ -1,0 +1,14 @@
+MISMATCH case 0 (gaussian_64x64x1024) C[1][32]: got 0xc2be want 0xc2bd
+MISMATCH case 0 (gaussian_64x64x1024) C[2][54]: got 0x42b5 want 0x42b4
+MISMATCH case 0 (gaussian_64x64x1024) C[3][13]: got 0xc2bc want 0xc2bb
+MISMATCH case 0 (gaussian_64x64x1024) C[3][62]: got 0x4298 want 0x4297
+MISMATCH case 0 (gaussian_64x64x1024) C[3][63]: got 0xc28d want 0xc28c
+MISMATCH case 0 (gaussian_64x64x1024) C[5][39]: got 0xc25c want 0xc25a
+MISMATCH case 0 (gaussian_64x64x1024) C[5][41]: got 0x42b1 want 0x42b0
+MISMATCH case 0 (gaussian_64x64x1024) C[5][52]: got 0xc2ab want 0xc2a8
+case  0 gaussian_64x64x1024      M=64 N=64 K= 1024: 119 mismatches of 4096
+case  1 laplace_64x64x1024       M=64 N=64 K= 1024: 31 mismatches of 4096
+m7a_mx_fp4ctl: 2 cases, 8192 outputs, 150 mismatches (2 cases with a mismatch)
+Gemmini extension configured with:
+    dim = 16
+*** FAILED *** (tohost = 1)

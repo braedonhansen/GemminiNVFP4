@@ -1,0 +1,27 @@
+case  0 gaussian_64x64x1024      M=64 N=64 K= 1024: 0 mismatches of 4096
+case  1 gaussian_32x32x2048      M=32 N=32 K= 2048: 0 mismatches of 1024
+case  2 gaussian_32x32x4096      M=32 N=32 K= 4096: 0 mismatches of 1024
+case  3 laplace_64x64x1024       M=64 N=64 K= 1024: 0 mismatches of 4096
+case  4 laplace_32x32x2048       M=32 N=32 K= 2048: 0 mismatches of 1024
+case  5 laplace_32x32x4096       M=32 N=32 K= 4096: 0 mismatches of 1024
+case  6 student_t3_64x64x1024    M=64 N=64 K= 1024: 0 mismatches of 4096
+case  7 student_t3_32x32x2048    M=32 N=32 K= 2048: 0 mismatches of 1024
+case  8 student_t3_32x32x4096    M=32 N=32 K= 4096: 0 mismatches of 1024
+case  9 outlier_64x64x1024       M=64 N=64 K= 1024: 0 mismatches of 4096
+case 10 outlier_32x32x2048       M=32 N=32 K= 2048: 0 mismatches of 1024
+case 11 outlier_32x32x4096       M=32 N=32 K= 4096: 0 mismatches of 1024
+case 12 gaussian_32x64x160       M=32 N=64 K=  160: 0 mismatches of 2048
+case 13 gaussian_64x32x96        M=64 N=32 K=   96: 0 mismatches of 2048
+case 14 laplace_32x64x160        M=32 N=64 K=  160: 0 mismatches of 2048
+case 15 laplace_64x32x96         M=64 N=32 K=   96: 0 mismatches of 2048
+case 16 student_t3_32x64x160     M=32 N=64 K=  160: 0 mismatches of 2048
+case 17 student_t3_64x32x96      M=64 N=32 K=   96: 0 mismatches of 2048
+case 18 outlier_32x64x160        M=32 N=64 K=  160: 0 mismatches of 2048
+case 19 outlier_64x32x96         M=64 N=32 K=   96: 0 mismatches of 2048
+case 20 ocp_gaussian_32x32x256   M=32 N=32 K=  256: 0 mismatches of 1024
+case 21 ocp_laplace_64x64x1024   M=64 N=64 K= 1024: 0 mismatches of 4096
+case 22 wide_range_32x32x1024    M=32 N=32 K= 1024: 0 mismatches of 1024
+case 23 wide_range_ocp_32x32x512 M=32 N=32 K=  512: 0 mismatches of 1024
+m7a_mx_fp4: 24 cases, 48128 outputs, 0 mismatches (0 cases with a mismatch)
+Gemmini extension configured with:
+    dim = 16

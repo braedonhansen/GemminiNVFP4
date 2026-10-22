@@ -1,0 +1,17 @@
+200 models x 4 sequences x 8 positions = 6400 reference logit rows; wrote docs/m7a/transformer.csv (15 rows)
+lvl format                    seqs          KL    top1  logit SQNR dB
+F   fp32                       800   8.124e-15  1.0000         144.08
+F   int8                       800   8.212e-04  0.9875          34.81
+F   mxfp8_ocp                  800   2.417e-02  0.9408          18.04
+F   mxfp4_ocp                  800   1.759e-01  0.8044           7.99
+F   mxfp8_branch               800   1.229e-02  0.9533          21.13
+F   mxfp4_branch               800   3.549e-01  0.7300           5.01
+F   nvfp4                      800   1.102e-01  0.8664          10.81
+H   fp32                       800   3.611e-14  1.0000         138.04
+H   int8                       800   8.210e-04  0.9875          34.82
+H   mxfp8_branch               800   2.547e-02  0.9330          17.44
+H   mxfp4_branch               800   3.549e-01  0.7300           5.01
+H   nvfp4                      800   1.099e-01  0.8659          10.80
+H   nvfp4_bf16acc              800   1.124e-01  0.8652          10.68
+H   mxfp4_branch_fp32acc       800   3.549e-01  0.7300           5.01
+H   fp32_fused                 800   1.918e-14  1.0000         139.32

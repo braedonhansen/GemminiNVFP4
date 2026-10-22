@@ -1,0 +1,8 @@
+case 0 (M=64 N=64 K=1024): sep 0 mismatches, fused 3036 mismatches, of 4096
+case 1 (M=64 N=64 K=1024): sep 0 mismatches, fused 2031 mismatches, of 4096
+case 2 (M=32 N=32 K=4096): sep 0 mismatches, fused 811 mismatches, of 1024
+case 3 (M=16 N=16 K=16384): sep 0 mismatches, fused 210 mismatches, of 256
+case 4 (M=20 N=28 K=260): sep 0 mismatches, fused 366 mismatches, of 560
+m7a_fp32: 5 cases, 10032 outputs: separate-model mismatches 0, fused-model mismatches 6454
+Gemmini extension configured with:
+    dim = 4

@@ -1,0 +1,4 @@
+factor bits 0x38f06f58
+nvfp4_m7a_student_t3 M=64 K=1024 N=64: 0 mismatches of 4096 outputs, 1679 cycles (config + loads + matmul + mvout)
+Gemmini extension configured with:
+    dim = 16
