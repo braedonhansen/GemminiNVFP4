@@ -129,6 +129,36 @@ The user has Cadence access on school servers, currently used for Virtuoso throu
   - A MobaXterm plugin is a separate project and only needed if direct SSH isn't allowed (e.g. a gateway that only allows interactive sessions).
   - Check the school's rules on automated jobs and on publishing results from a foundry PDK. NDAs often allow normalized or relative numbers but not absolute ones.
 
+**Inventory found (2026-10-21, USC server `the school server`):**
+- Setup: `tcsh; source ~/setup_ee477_ee577a_v2602.csh` (course EE477/EE577A). It only puts Virtuoso (`/tools/cadence/IC251`) on the path.
+- `/tools/cadence`:
+  - CONFRML252
+  - DDI231
+  - **DDI251**: `GENUS251`, `INNOVUS251`, `JSTUDIO251` (Joules Studio)
+  - IC231, IC251
+  - INCISIVE152
+  - LIBERATE251
+  - PEGASUS251
+  - QUANTUS251
+  - SPECTRE251
+  - STRATUS2501
+  - **XCELIUM2509**
+- `/tools/synopsys`: `syn` (Design Compiler), `prime` (PrimeTime; PrimePower licence unknown), `vcs`, `hspice`, `vc_formal`.
+- `/tools/PDK`:
+  - `180nm_.8V_3.3V`
+  - `65nm_MSRF_General_Purpose_Plus` (likely a foundry kit under NDA; check for an SRAM compiler)
+  - `NCSU45PDK` (FreePDK45, open)
+  - the course's GPDK045 (`~/work_gpdk045`, library path not yet located)
+- Licences:
+  - `LM_LICENSE_FILE=<school Cadence licence servers>`
+  - `SNPSLMD_LICENSE_FILE=<school Synopsys licence server>`
+- **Genus 25.1 runs**: `/tools/cadence/DDI251/GENUS251/bin/genus -no_gui -batch -execute "puts GENUS_OK; exit"` printed GENUS_OK and checked out `Genus_Synthesis`.
+- Still to check:
+  - a Joules licence
+  - the PDK cell libraries (.lib with power) and SRAM options
+  - SSH access from WSL
+  - **the professor's OK to use course licences for this project** (user emailing, 2026-10-21)
+
 Open-source fallback PDKs:
 | PDK | Node | Support | SRAMs | Notes |
 |---|---|---|---|---|
