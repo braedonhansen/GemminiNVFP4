@@ -1,0 +1,4 @@
+`verilator_config
+// Trace only the Gemmini instance (and everything below it). First rule turns everything off; the second turns the Gemmini subtree on.
+tracing_off -scope "*"
+tracing_on -scope "TestDriver.testHarness.chiptop0.system.tile_prci_domain.element_reset_domain_rockettile.gemmini*" -levels 99
