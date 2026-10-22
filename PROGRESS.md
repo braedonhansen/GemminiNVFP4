@@ -29,7 +29,7 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
   - [x] 6.3 Scale stage + FP32 acc + 16-element blocks + tensor scale: Phase A (standalone), B (integration), C (-0 fix, FP32 mvout + acc_scale, first e2e RTL matmul), all coordinator-verified
   - [x] 6.4 libgemmini Spike mirror: `libgemmini_nvfp4.so` (spike --extension=gemmini_nvfp4), bit-exact; Spike and RTL agree on 3 cases
   - [x] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator: 4 multi-tile / long-K shapes, layout controls caught in RTL and Spike
-- [ ] M7: Longer K, performance measurement vs. MX baseline.
+- [ ] M7: Accuracy + energy comparison: FP32 and INT8 stock Gemmini, MXFP8, MXFP4, NVFP4. Plan: [docs/M7-measurement-plan.md](docs/M7-measurement-plan.md) (not started; stock = upstream ~/chipyard unmodified; open: C3-C4, P1-P2).
 - [ ] Later: update the site write-up for the MX-base pivot; publish this repo (LICENSE + README + notices)
 
 ## How work is run
@@ -67,6 +67,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-21
+- M7 planned (not executed) in docs/M7-measurement-plan.md. User: baselines are stock Gemmini FP32 (max accuracy) and INT8, plus MXFP8/MXFP4; measure the whole Gemmini block for power. Found: stock FP32 Gemmini is DIM=4; MX has no per-tensor scale (tests use ACC_SCALE_IDENTITY); SRAM sizes differ per config (INT8 128/32, MX 256/64, NVFP4 256/128 KiB); no power tools installed. Later: stock stays exactly stock (FP32 4x4 + INT8 from upstream ~/chipyard, since the MX fork edits Configs/PE/Arithmetic and halves INT8 SRAM); power via Cadence on the school servers (tool/PDK inventory pending).
 - 00:07: posted the M6.5 site update dated Oct 21 (Portfolio `5daf423`, via a temporary worktree on origin/main; only gemmini-nvfp4.html; the user's own newer commit 2555c20 is preserved). Report doc updated with the M6.5 table and the M7 next step. The stale pre-restart trigger to re-dispatch M6.5 was ignored, since M6.5 was already done.
 ### 2026-10-20 (M6.5)
 - M6.5 run (subagent, not ticked, no RTL or model change needed): four multi-tile shapes (64x64x128, 32x96x64, 96x32x256, 64x64x512, K up to 512) are bit-exact against the refmodel in Spike (`gemmini_nvfp4`) and Verilator (`NvFp4GemminiRocketConfig`), 0 mismatches of 14,336 outputs, RTL 8,285 / 5,732 / 9,831 / 17,875 cycles, using the existing `gemmini_loop_ws_spad` loop (no software unrolling). New: `refmodel/export_e2e.py` takes M N K and a seed (old headers byte-identical), `hw/tests/nvfp4_e2e_mnk.c` + four `nvfp4_mt_*` wrappers, `refmodel/tests/test_export_e2e.py` (pytest 145). Controls: one flipped value gives 1 mismatch; RTL j-group stride mutated gives 3,008 mismatches, then 0 after `git checkout` and a rebuild; Spike model index mutated gives 3,968. MX regression passes (Spike fp4 64x64/128x128/requants, Verilator fp4_64x64). Details: docs/M6.5-results.md, logs/m6.5.steps.

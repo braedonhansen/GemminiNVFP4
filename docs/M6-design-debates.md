@@ -115,6 +115,7 @@ Today MX does `applyE9M0Scale`, an exponent add on a BF16 value with no multipli
 - Keep negative controls in every new test.
 
 ## D8: What to measure and compare (sets up M7)
+**Superseded 2026-10-21 by [M7-measurement-plan.md](M7-measurement-plan.md)** (adds FP32 + INT8 stock baselines, MXFP8, energy flow).
 - Accuracy: NVFP4 (exact, FP32) vs MX FP4 (E8M0, rounded, BF16) on the same matrices, plus the tiny transformer.
 - Area/logic depth (Yosys): MxGen FP4 PE vs NVFP4 integer PE (D1); BF16 vs FP32 accumulator.
 - Cycles: NVFP4 vs MX FP4 on the same matmul sizes in Verilator.
