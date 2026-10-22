@@ -29,7 +29,10 @@ accumulation per 16-element block, per-block scale applied at accumulator drain,
   - [x] 6.3 Scale stage + FP32 acc + 16-element blocks + tensor scale: Phase A (standalone), B (integration), C (-0 fix, FP32 mvout + acc_scale, first e2e RTL matmul), all coordinator-verified
   - [x] 6.4 libgemmini Spike mirror: `libgemmini_nvfp4.so` (spike --extension=gemmini_nvfp4), bit-exact; Spike and RTL agree on 3 cases
   - [x] 6.5 End-to-end NVFP4 config bit-exact in Spike + Verilator: 4 multi-tile / long-K shapes, layout controls caught in RTL and Spike
-- [ ] M7: Accuracy + energy comparison: FP32 and INT8 stock Gemmini, MXFP8, MXFP4, NVFP4. Plan: [docs/M7-measurement-plan.md](docs/M7-measurement-plan.md) (not started; stock = upstream ~/chipyard unmodified; open: C3-C4, P1-P2).
+- [ ] M7: Accuracy + energy comparison: FP32 and INT8 stock Gemmini, MXFP8, MXFP4, NVFP4. Plan: [docs/M7-measurement-plan.md](docs/M7-measurement-plan.md) 
+  - [x] M7.A accuracy study (done 2026-10-21): docs/M7-accuracy-results.md
+  - [ ] M7.P energy (waits on the user's Cadence tool/PDK inventory)
+  (stock = upstream ~/chipyard unmodified; open: C3-C4, P1-P2).
 - [ ] Later: update the site write-up for the MX-base pivot; publish this repo (LICENSE + README + notices)
 
 ## How work is run
@@ -67,6 +70,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-21
+- **M7.A DONE** (coordinator verified): pytest 173; F and H sweeps regenerate byte-identical CSVs (1680 / 2400 rows); all 5 M7.A headers regenerate byte-identically; fresh rebuild + Spike: INT8 0/12,032, FP32 separate-model 0/10,032 (fused model 6,454 mismatches = control), MXFP8 0/34,816, MXFP4 0/48,128, MXFP4 RTZ control 150/8,192, NVFP4 k1024 + outlier 0/4096 each (logs/coord-verify-m7a.sh). Findings at K=1024 (Level H SQNR, Gaussian): FP32 130.5, INT8 37.0, MXFP8 24.8, NVFP4 16.8, MXFP4-OCP 15.6, MXFP4-branch 8.4 dB. NVFP4 is between MXFP4 and MXFP8 in all 24 cells but closes only 13-29% of the gap vs OCP MXFP4 (~50% vs Berkeley's recipe). Berkeley's test data uses shared exp = floor(log2 amax) (no emax term); MXFP8 with OCP scaling overflows on MX hardware. Accumulator ablations: <= 0.3 dB. Libgemmini models FP32 as separate mul+add while the RTL PE is fused (unverified vs RTL). Site update committed locally in a temp worktree (not yet pushed: push needs the user's OK this session). Agent commit dbdfbaa; data headers (~46 MB) untracked, regenerate with refmodel/export_m7a.py.
+- M7.A accuracy study dispatched (Sonnet subagent, brief briefs/M7.A-accuracy-study.md): Level F (format) + Level H (hardware, each proven bit-exact vs its own Spike) for FP32, INT8, MXFP8, MXFP4, NVFP4; no RTL, no Verilator, no real-model weights. Plan committed as e823a9c. Power waits on the user's Cadence inventory.
 - M7 planned (not executed) in docs/M7-measurement-plan.md. User: baselines are stock Gemmini FP32 (max accuracy) and INT8, plus MXFP8/MXFP4; measure the whole Gemmini block for power. Found: stock FP32 Gemmini is DIM=4; MX has no per-tensor scale (tests use ACC_SCALE_IDENTITY); SRAM sizes differ per config (INT8 128/32, MX 256/64, NVFP4 256/128 KiB); no power tools installed. Later: stock stays exactly stock (FP32 4x4 + INT8 from upstream ~/chipyard, since the MX fork edits Configs/PE/Arithmetic and halves INT8 SRAM); power via Cadence on the school servers (tool/PDK inventory pending).
 - 00:07: posted the M6.5 site update dated Oct 21 (Portfolio `5daf423`, via a temporary worktree on origin/main; only gemmini-nvfp4.html; the user's own newer commit 2555c20 is preserved). Report doc updated with the M6.5 table and the M7 next step. The stale pre-restart trigger to re-dispatch M6.5 was ignored, since M6.5 was already done.
 ### 2026-10-20 (M6.5)
