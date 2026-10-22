@@ -153,8 +153,9 @@ The user has Cadence access on school servers, currently used for Virtuoso throu
   - `LM_LICENSE_FILE=<school Cadence licence servers>`
   - `SNPSLMD_LICENSE_FILE=<school Synopsys licence server>`
 - **Genus 25.1 runs**: `/tools/cadence/DDI251/GENUS251/bin/genus -no_gui -batch -execute "puts GENUS_OK; exit"` printed GENUS_OK and checked out `Genus_Synthesis`.
+- **Joules runs** (`/tools/cadence/DDI251/JSTUDIO251/bin/joules`, checked out `Joules_XL`). **Innovus 25.1 runs** (`/tools/cadence/DDI251/INNOVUS251/bin/innovus`).
+- **PDK default (user, 2026-10-21): FreePDK45** (public, so results are publishable and reproducible), with Nangate Open Cell Library standard cells and OpenRAM SRAM macros. It changes if the professor names another PDK.
 - Still to check:
-  - a Joules licence
   - the PDK cell libraries (.lib with power) and SRAM options
   - SSH access from WSL
   - **the professor's OK to use course licences for this project** (user emailing, 2026-10-21)
