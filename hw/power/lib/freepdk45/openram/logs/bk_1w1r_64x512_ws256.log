@@ -1,0 +1,55 @@
+[2026-10-21 23:47:13.510412] |==============================================================================|
+[2026-10-21 23:47:13.510579] |=========                      OpenRAM v1.2.48                       =========|
+[2026-10-21 23:47:13.510619] |=========                                                            =========|
+[2026-10-21 23:47:13.510641] |=========               VLSI Design and Automation Lab               =========|
+[2026-10-21 23:47:13.510659] |=========        Computer Science and Engineering Department         =========|
+[2026-10-21 23:47:13.510676] |=========            University of California Santa Cruz             =========|
+[2026-10-21 23:47:13.510691] |=========                                                            =========|
+[2026-10-21 23:47:13.510706] |=========          Usage help: openram-user-group@ucsc.edu           =========|
+[2026-10-21 23:47:13.510720] |=========        Development help: openram-dev-group@ucsc.edu        =========|
+[2026-10-21 23:47:13.510734] |=========                See LICENSE for license info                =========|
+[2026-10-21 23:47:13.510749] |==============================================================================|
+[2026-10-21 23:47:13.510770] ** Start: 10/21/2026 23:47:13
+[2026-10-21 23:47:13.510792] Technology: freepdk45
+[2026-10-21 23:47:13.510825] Total size: 32768 bits
+[2026-10-21 23:47:13.510849] Word size: 512
+Words: 64
+Banks: 1
+[2026-10-21 23:47:13.510867] Write size: 256
+[2026-10-21 23:47:13.510885] RW ports: 0
+R-only ports: 1
+W-only ports: 1
+[2026-10-21 23:47:13.510901] Netlist only mode (no physical design is being done, netlist_only=False to disable).
+[2026-10-21 23:47:13.510916] Design supply routing skipped. Supplies will have multiple must-connect pins. (route_supplies=True to enable supply routing).
+[2026-10-21 23:47:13.510930] DRC/LVS/PEX is only run on the top-level design to save run-time (inline_lvsdrc=True to do inline checking).
+[2026-10-21 23:47:13.510945] DRC/LVS/PEX is disabled (check_lvsdrc=True to enable).
+[2026-10-21 23:47:13.510959] Characterization is disabled (using analytical delay models) (analytical_delay=False to simulate).
+[2026-10-21 23:47:13.510972] Only generating nominal corner timing.
+[2026-10-21 23:47:13.510988] Words per row: None
+[2026-10-21 23:47:13.511008] Output files are: 
+[2026-10-21 23:47:13.511024] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.lvs
+[2026-10-21 23:47:13.511039] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.sp
+[2026-10-21 23:47:13.511053] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.v
+[2026-10-21 23:47:13.511067] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.lib
+[2026-10-21 23:47:13.511081] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.py
+[2026-10-21 23:47:13.511096] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.html
+[2026-10-21 23:47:13.511109] /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.log
+[2026-10-21 23:54:42.848973] ** Submodules: 449.3 seconds
+[2026-10-21 23:54:42.849137] ** SRAM creation: 449.3 seconds
+[2026-10-21 23:54:42.849202] SP: Writing to /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.sp
+[2026-10-21 23:54:43.823476] ** Spice writing: 1.0 seconds
+[2026-10-21 23:54:43.823600] DELAY: Writing stimulus...
+[2026-10-21 23:54:46.306820] ** DELAY: 2.5 seconds
+[2026-10-21 23:54:46.886007] LVS: Writing to /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.lvs.sp
+[2026-10-21 23:54:47.486169] ** LVS writing: 0.6 seconds
+[2026-10-21 23:54:47.486290] LIB: Characterizing... 
+[2026-10-21 23:54:47.537555] WARNING: file elmore.py: line 45: In analytical mode, all ports have the timing of the first read port.
+
+[2026-10-21 23:54:49.719081] ** Characterization: 2.2 seconds
+[2026-10-21 23:54:49.719284] Config: Writing to /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.py
+[2026-10-21 23:54:49.719327] ** Config: 0.0 seconds
+[2026-10-21 23:54:49.720145] Datasheet: Writing to /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.html
+[2026-10-21 23:54:49.721527] ** Datasheet: 0.0 seconds
+[2026-10-21 23:54:49.721578] Verilog: Writing to /home/braed/nvfp4-logs/m7p-lib/gen/bk_1w1r_64x512_ws256/bk_1w1r_64x512_ws256.v
+[2026-10-21 23:54:49.721733] ** Verilog: 0.0 seconds
+[2026-10-21 23:54:49.723069] ** End: 456.2 seconds

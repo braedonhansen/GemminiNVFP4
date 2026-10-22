@@ -1,0 +1,11 @@
+PASS raw bk_1rw_256x128_ws8             leak=0.033589 mW  active=['!csb0 & !web0:4.887', '!csb0 & web0:4.887']  disabled=2  ports=7
+PASS pj  bk_1rw_256x128_ws8             leak=0.033589 mW  active=['!csb0 & !web0:48.87', '!csb0 & web0:48.87']  disabled=2  ports=7
+PASS raw bk_1w1r_128x128_nomask         leak=0.017781 mW  active=['!csb0:4.612', '!csb1:4.612']  disabled=2  ports=8
+PASS pj  bk_1w1r_128x128_nomask         leak=0.017781 mW  active=['!csb0:46.12', '!csb1:46.12']  disabled=2  ports=8
+PASS raw bk_1w1r_256x128_ws8            leak=0.034223 mW  active=['!csb0:8.478', '!csb1:8.478']  disabled=2  ports=9
+PASS pj  bk_1w1r_256x128_ws8            leak=0.034223 mW  active=['!csb0:84.78', '!csb1:84.78']  disabled=2  ports=9
+PASS raw bk_1w1r_64x512_ws256           leak=0.034035 mW  active=['!csb0:9.598', '!csb1:9.598']  disabled=2  ports=9
+PASS pj  bk_1w1r_64x512_ws256           leak=0.034035 mW  active=['!csb0:95.98', '!csb1:95.98']  disabled=2  ports=9
+PASS raw bk_1w1r_64x512_ws8             leak=0.034221 mW  active=['!csb0:9.628', '!csb1:9.628']  disabled=2  ports=9
+PASS pj  bk_1w1r_64x512_ws8             leak=0.034221 mW  active=['!csb0:96.28', '!csb1:96.28']  disabled=2  ports=9
+SUMMARY checked=10 bad=0

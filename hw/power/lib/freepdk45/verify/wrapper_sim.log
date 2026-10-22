@@ -1,0 +1,31 @@
+## int8 mem_ext rw 12 128 8 4000 bk_1rw_256x128_ws8
+TB_RESULT dut=int8/mem_ext checks=1527 reads=1527 writes=1498 errors=0
+	Maximum resident set size (kbytes): 252524
+## int8 mem_0_ext wr 9 512 8 4000 bk_1w1r_64x512_ws8
+TB_RESULT dut=int8/mem_0_ext checks=2650 reads=2650 writes=2636 errors=0
+	Maximum resident set size (kbytes): 252256
+## mxfp4 mem_ext wr 12 128 8 4000 bk_1w1r_256x128_ws8
+TB_RESULT dut=mxfp4/mem_ext checks=2661 reads=2661 writes=2677 errors=0
+	Maximum resident set size (kbytes): 252464
+## mxfp4 banks_0_ext wr 8 512 256 4000 bk_1w1r_64x512_ws256
+TB_RESULT dut=mxfp4/banks_0_ext checks=2684 reads=2684 writes=2680 errors=0
+	Maximum resident set size (kbytes): 252240
+## mxfp4 banks_0_0_ext wr 7 128 0 4000 bk_1w1r_128x128_nomask
+TB_RESULT dut=mxfp4/banks_0_0_ext checks=2644 reads=2644 writes=2681 errors=0
+	Maximum resident set size (kbytes): 252468
+## nvfp4 mem_ext wr 12 128 8 4000 bk_1w1r_256x128_ws8
+TB_RESULT dut=nvfp4/mem_ext checks=2661 reads=2661 writes=2677 errors=0
+	Maximum resident set size (kbytes): 252416
+## nvfp4 banks_0_ext wr 8 1024 256 4000 bk_1w1r_64x512_ws256
+TB_RESULT dut=nvfp4/banks_0_ext checks=2686 reads=2686 writes=2709 errors=0
+	Maximum resident set size (kbytes): 252248
+## nvfp4 banks_0_0_ext wr 7 128 0 4000 bk_1w1r_128x128_nomask
+TB_RESULT dut=nvfp4/banks_0_0_ext checks=2644 reads=2644 writes=2681 errors=0
+	Maximum resident set size (kbytes): 252512
+## fp32 mem_ext rw 12 128 8 4000 bk_1rw_256x128_ws8
+TB_RESULT dut=fp32/mem_ext checks=1527 reads=1527 writes=1498 errors=0
+	Maximum resident set size (kbytes): 252456
+## fp32 mem_0_ext wr 12 128 8 4000 bk_1w1r_256x128_ws8
+TB_RESULT dut=fp32/mem_0_ext checks=2661 reads=2661 writes=2677 errors=0
+	Maximum resident set size (kbytes): 252424
+ALLSIMDONE

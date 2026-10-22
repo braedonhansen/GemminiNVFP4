@@ -1,0 +1,11 @@
+MATCH    int8/mem_0_ext: 9 ports identical (name, dir, width)
+MATCH    int8/mem_ext: 7 ports identical (name, dir, width)
+SUMMARY int8: compared=2 bad=0
+MATCH    mxfp4/banks_0_0_ext: 8 ports identical (name, dir, width)
+MATCH    mxfp4/banks_0_ext: 9 ports identical (name, dir, width)
+MATCH    mxfp4/mem_ext: 9 ports identical (name, dir, width)
+SUMMARY mxfp4: compared=3 bad=0
+MATCH    nvfp4/banks_0_0_ext: 8 ports identical (name, dir, width)
+MATCH    nvfp4/banks_0_ext: 9 ports identical (name, dir, width)
+MATCH    nvfp4/mem_ext: 9 ports identical (name, dir, width)
+SUMMARY nvfp4: compared=3 bad=0

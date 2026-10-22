@@ -1,0 +1,237 @@
+{
+  "note": "SRAM inventory and OpenRAM compositions (M7.P0b). instances = number of identical ext instances in the Gemmini hierarchy; the other macros in each SoC (Rocket caches, L2 inclusive cache, bank.ram) are excluded.",
+  "bank_energy_units": "pJ per access in *_pj.lib; leakage mW per bank in all libs",
+  "designs": {
+    "int8": [
+      {
+        "ext": "mem_ext",
+        "depth": 4096,
+        "width": 128,
+        "ports": "1RW (mrw)",
+        "mask_gran_bits": 8,
+        "instances": 4,
+        "role": "scratchpad bank (spad_mems_0..3)",
+        "bank": "bk_1rw_256x128_ws8",
+        "bank_shape": [
+          256,
+          128
+        ],
+        "banks_deep": 16,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      },
+      {
+        "ext": "mem_0_ext",
+        "depth": 512,
+        "width": 512,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 8,
+        "instances": 2,
+        "role": "accumulator bank (acc_mems_0..1)",
+        "bank": "bk_1w1r_64x512_ws8",
+        "bank_shape": [
+          64,
+          512
+        ],
+        "banks_deep": 8,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      }
+    ],
+    "mxfp4": [
+      {
+        "ext": "mem_ext",
+        "depth": 4096,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 8,
+        "instances": 4,
+        "role": "scratchpad bank",
+        "bank": "bk_1w1r_256x128_ws8",
+        "bank_shape": [
+          256,
+          128
+        ],
+        "banks_deep": 16,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      },
+      {
+        "ext": "banks_0_ext",
+        "depth": 256,
+        "width": 512,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 256,
+        "instances": 4,
+        "role": "accumulator sub-bank (2 acc_mems x 2 banks)",
+        "bank": "bk_1w1r_64x512_ws256",
+        "bank_shape": [
+          64,
+          512
+        ],
+        "banks_deep": 4,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      },
+      {
+        "ext": "banks_0_0_ext",
+        "depth": 128,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": null,
+        "instances": 8,
+        "role": "shared scale memory bank",
+        "bank": "bk_1w1r_128x128_nomask",
+        "bank_shape": [
+          128,
+          128
+        ],
+        "banks_deep": 1,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      }
+    ],
+    "nvfp4": [
+      {
+        "ext": "mem_ext",
+        "depth": 4096,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 8,
+        "instances": 4,
+        "role": "scratchpad bank",
+        "bank": "bk_1w1r_256x128_ws8",
+        "bank_shape": [
+          256,
+          128
+        ],
+        "banks_deep": 16,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      },
+      {
+        "ext": "banks_0_ext",
+        "depth": 256,
+        "width": 1024,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 256,
+        "instances": 4,
+        "role": "accumulator sub-bank (2 acc_mems x 2 banks)",
+        "bank": "bk_1w1r_64x512_ws256",
+        "bank_shape": [
+          64,
+          512
+        ],
+        "banks_deep": 4,
+        "banks_wide": 2,
+        "derived_not_elaborated": false
+      },
+      {
+        "ext": "banks_0_0_ext",
+        "depth": 128,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": null,
+        "instances": 8,
+        "role": "shared scale memory bank",
+        "bank": "bk_1w1r_128x128_nomask",
+        "bank_shape": [
+          128,
+          128
+        ],
+        "banks_deep": 1,
+        "banks_wide": 1,
+        "derived_not_elaborated": false
+      }
+    ],
+    "mxfp8": [
+      {
+        "ext": "mem_ext",
+        "depth": 4096,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 8,
+        "instances": 4,
+        "role": "scratchpad bank",
+        "bank": "bk_1w1r_256x128_ws8",
+        "bank_shape": [
+          256,
+          128
+        ],
+        "banks_deep": 16,
+        "banks_wide": 1,
+        "derived_not_elaborated": true
+      },
+      {
+        "ext": "banks_0_ext",
+        "depth": 256,
+        "width": 512,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 256,
+        "instances": 4,
+        "role": "accumulator sub-bank",
+        "bank": "bk_1w1r_64x512_ws256",
+        "bank_shape": [
+          64,
+          512
+        ],
+        "banks_deep": 4,
+        "banks_wide": 1,
+        "derived_not_elaborated": true
+      },
+      {
+        "ext": "banks_0_0_ext",
+        "depth": 128,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": null,
+        "instances": 8,
+        "role": "shared scale memory bank",
+        "bank": "bk_1w1r_128x128_nomask",
+        "bank_shape": [
+          128,
+          128
+        ],
+        "banks_deep": 1,
+        "banks_wide": 1,
+        "derived_not_elaborated": true
+      }
+    ],
+    "fp32": [
+      {
+        "ext": "mem_ext",
+        "depth": 4096,
+        "width": 128,
+        "ports": "1RW (mrw)",
+        "mask_gran_bits": 8,
+        "instances": 4,
+        "role": "scratchpad bank (derived)",
+        "bank": "bk_1rw_256x128_ws8",
+        "bank_shape": [
+          256,
+          128
+        ],
+        "banks_deep": 16,
+        "banks_wide": 1,
+        "derived_not_elaborated": true
+      },
+      {
+        "ext": "mem_0_ext",
+        "depth": 4096,
+        "width": 128,
+        "ports": "1W+1R (mwrite,read / write,read)",
+        "mask_gran_bits": 8,
+        "instances": 1,
+        "role": "accumulator bank (derived, 1 bank)",
+        "bank": "bk_1w1r_256x128_ws8",
+        "bank_shape": [
+          256,
+          128
+        ],
+        "banks_deep": 16,
+        "banks_wide": 1,
+        "derived_not_elaborated": true
+      }
+    ]
+  }
+}

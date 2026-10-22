@@ -1,0 +1,3 @@
+orfs 0b56643596e8ffd41b929858107c36602e0644f5 https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts (sparse flow/platforms/nangate45)
+openram v1.2.48 b6a6f12642df6b84facc24a77f9a6f67a0d62dab https://github.com/VLSIDA/OpenRAM
+NOTE: WSL has no outbound network; clones made with Windows git, copied in.
