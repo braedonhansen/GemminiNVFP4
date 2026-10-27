@@ -1,0 +1,32 @@
+From ee5991cdcdca085af7730f9a1732d8eb5109fffc Mon Sep 17 00:00:00 2001
+From: Braedonhansen <braedon.hansen@gmail.com>
+Date: Sun, 18 Oct 2026 04:09:04 -0700
+Subject: [PATCH 2/4] NVFP4 AccumulatorMem: block mvout reads while the delayed
+ accumulate read owns the SRAM read port
+
+The accumulate's old-row read is issued 3 cycles after the write fires (NvFp4RmwPipe.rd_en), so the existing
+"no read while a write accumulates" check (cycle of the write) no longer covers it. Found by running the M5 MX test
+binary on the NVFP4 simulator: AsymmetricTwoPortSyncMem asserted "cannot read full and chunk simultaneously".
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/main/scala/gemmini/AccumulatorMem.scala | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/main/scala/gemmini/AccumulatorMem.scala b/src/main/scala/gemmini/AccumulatorMem.scala
+index 22811fa4..606662bc 100644
+--- a/src/main/scala/gemmini/AccumulatorMem.scala
++++ b/src/main/scala/gemmini/AccumulatorMem.scala
+@@ -703,6 +703,9 @@ class AccumulatorMem[T <: Data, U <: Data](
+   io.read.req.ready := q_will_be_empty && (
+       // Make sure we aren't accumulating, which would take over both ports
+       !(io.write.valid && io.write.bits.acc) &&
++      // NVFP4: the accumulate's SRAM read is issued ScaleLat cycles after the write fires (NvFp4RmwPipe.rd_en), so that cycle
++      // owns the full-width read port too
++      !nvpipe.map(_.io.rd_en).getOrElse(false.B) &&
+       !pipelined_writes.map(r => r.valid && r.bits.addr === io.read.req.bits.addr).reduce(_||_)  &&
+       !block_read_req
+   )
+-- 
+2.34.1
+

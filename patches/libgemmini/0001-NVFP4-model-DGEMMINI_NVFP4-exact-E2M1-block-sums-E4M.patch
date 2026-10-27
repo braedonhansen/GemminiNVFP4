@@ -1,0 +1,314 @@
+From e9a95f64cfb97465585f976b27db99e6ecf9db1a Mon Sep 17 00:00:00 2001
+From: Braedonhansen <braedon.hansen@gmail.com>
+Date: Tue, 20 Oct 2026 18:43:29 -0700
+Subject: [PATCH 1/3] NVFP4 model (-DGEMMINI_NVFP4): exact E2M1 block sums,
+ E4M3 scale stage, FP32 accumulate, tensor factor at mvout;
+ libgemmini_nvfp4.so + host unit check
+
+---
+ Makefile      | 19 ++++++++---
+ gemmini.cc    | 95 +++++++++++++++++++++++++++++++++++++++++++++++++--
+ nvfp4_math.h  | 58 +++++++++++++++++++++++++++++++
+ nvfp4_unit.cc | 49 ++++++++++++++++++++++++++
+ 4 files changed, 215 insertions(+), 6 deletions(-)
+ create mode 100644 nvfp4_math.h
+ create mode 100644 nvfp4_unit.cc
+
+diff --git a/Makefile b/Makefile
+index bed2bfc..df7a25e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -6,7 +6,7 @@ endif
+ 
+ PREFIX ?= $RISCV/
+ 
+-default: libgemmini.so libgemmini_dim32.so libgemmini_dim8.so
++default: libgemmini.so libgemmini_dim32.so libgemmini_dim8.so libgemmini_nvfp4.so
+ 
+ libgemmini.so: gemmini.cc gemmini_perf.cc $(wildcard perf/*.cc perf/*/*.cc)
+ 	g++ -L $(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -shared -o $@ -std=c++17 -I $(RISCV)/include -fPIC -O3 $(filter %.cc,$^)
+@@ -19,9 +19,20 @@ libgemmini_dim32.so: gemmini.cc gemmini_perf.cc $(wildcard perf/*.cc perf/*/*.cc
+ libgemmini_dim8.so: gemmini.cc gemmini_perf.cc $(wildcard perf/*.cc perf/*/*.cc)
+ 	g++ -DGEMMINI_DIM=8 -L $(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -shared -o $@ -std=c++17 -I $(RISCV)/include -fPIC -O3 $(filter %.cc,$^)
+ 
++
++# NVFP4 hardware model (bit-exact vs the NvFp4GemminiRocketConfig RTL), registered as extension "gemmini_nvfp4"
++# (run: spike --extension=gemmini_nvfp4 ...; spike dlopens libgemmini_nvfp4.so from $RISCV/lib via the extension name).
++# -ffp-contract=off: no fused multiply-add anywhere in the float32 model.
++libgemmini_nvfp4.so: gemmini.cc gemmini_perf.cc nvfp4_math.h $(wildcard perf/*.cc perf/*/*.cc)
++	g++ -DGEMMINI_NVFP4 -ffp-contract=off -L $(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -shared -o $@ -std=c++17 -I $(RISCV)/include -fPIC -O3 $(filter %.cc,$^)
++
++# host unit check of the NVFP4 scale / accumulate model against refmodel/vectors (no Spike needed)
++nvfp4_unit: nvfp4_unit.cc nvfp4_math.h
++	g++ -ffp-contract=off -std=c++17 -O2 -o $@ $<
++
+ .PHONY: install
+-install: libgemmini.so libgemmini_dim32.so libgemmini_dim8.so
+-	cp libgemmini.so libgemmini_dim32.so libgemmini_dim8.so $(RISCV)/lib
++install: libgemmini.so libgemmini_dim32.so libgemmini_dim8.so libgemmini_nvfp4.so
++	cp libgemmini.so libgemmini_dim32.so libgemmini_dim8.so libgemmini_nvfp4.so $(RISCV)/lib
+ 
+ clean:
+-	rm -rf *.o *.so
++	rm -rf *.o *.so nvfp4_unit
+diff --git a/gemmini.cc b/gemmini.cc
+index 655fc0f..9e5254f 100644
+--- a/gemmini.cc
++++ b/gemmini.cc
+@@ -1,5 +1,8 @@
+ #include "gemmini.h"
+ #include "mx_fp_math.h"
++#ifdef GEMMINI_NVFP4
++#include "nvfp4_math.h"
++#endif
+ #include "../gemmini-rocc-tests/include/vpu_ref.h"   // bit-exact VPU reference (shared with the tests)
+ #include <riscv/mmu.h>
+ #include <riscv/trap.h>
+@@ -15,13 +18,21 @@ using namespace std;
+ 
+ // DIM=16 builds register as "gemmini" (libgemmini.so); DIM=32 builds register as
+ // "gemmini_dim32" (libgemmini_dim32.so) so both meshes coexist as spike extensions.
+-#if GEMMINI_DIM == 32
++#ifdef GEMMINI_NVFP4
++// NVFP4 hardware model (libgemmini_nvfp4.so), registered as extension "gemmini_nvfp4":
++// run with `spike --extension=gemmini_nvfp4 ...`
++#define GEMMINI_EXT_NAME "gemmini_nvfp4"
++REGISTER_EXTENSION(gemmini_nvfp4, []() { return new gemmini_t; })
++#elif GEMMINI_DIM == 32
+ REGISTER_EXTENSION(gemmini_dim32, []() { return new gemmini_t; })
+ #elif GEMMINI_DIM == 8
+ REGISTER_EXTENSION(gemmini_dim8, []() { return new gemmini_t; })
+ #else
+ REGISTER_EXTENSION(gemmini, []() { return new gemmini_t; })
+ #endif
++#ifndef GEMMINI_EXT_NAME
++#define GEMMINI_EXT_NAME "gemmini"
++#endif
+ 
+ #define dprintf(...) { if (p->get_log_commits_enabled()) printf(__VA_ARGS__); }
+ 
+@@ -1414,6 +1425,15 @@ void gemmini_t::mx_loop_ws_spad(reg_t rs1, reg_t rs2) {
+   const uint32_t A_sp = gemmini_state.mx_loop_a_spad;
+   const uint8_t actf = gemmini_state.mx_act_fmt;
+   const uint8_t wgtf = gemmini_state.mx_wgt_fmt;
++#ifdef GEMMINI_NVFP4
++  // NVFP4 hardware has one datapath: FP4 (E2M1) x FP4 quad, no LUTs, FP32 accumulator, output through the spad.
++  if (!(actf == 2 && wgtf == 2) || gemmini_state.mx_fp8_altfmt || gemmini_state.mx_wgt_altfmt ||
++      gemmini_state.mx_lut_a_loaded || gemmini_state.mx_lut_b_loaded || gemmini_state.mx_out_fmt != 3 ||
++      gemmini_state.mx_dram_out) {
++    printf("NVFP4 LOOP_WS: only FP4 x FP4 (quad), out_fmt 3, no LUT / altfmt / DRAM-C loop\n");
++    return;
++  }
++#endif
+ 
+   // Decode a B (weight) nibble by the WEIGHT format, so act and weight may differ (asymmetric).
+   // wgtf==2: fp4 direct; else weight-LUT deproject (fp6 e3m2/e2m3, or fp8 e4m3/e5m2 by altfmt).
+@@ -1845,6 +1865,77 @@ void gemmini_t::mx_loop_ws_spad(reg_t rs1, reg_t rs2) {
+   }
+ 
+   if (actf == 2) {
++#ifdef GEMMINI_NVFP4
++    {
++      // NVFP4 model (bit-exact vs the RTL of M6.3B/C, see docs/M6.4-spike-plan.md and nvfp4_math.h):
++      //  - one 16-element K block per (k_outer, j, i) pass: exact integer sum of doubled-E2M1 products (no precision ramp)
++      //  - E4M3 scales (16-element blocks): block value = (float(isum)*sA)*sB, exact
++      //  - FP32 accumulator in mx_smem (2 uint16 per element, row-major [M][N]); K blocks ascending; the first write
++      //    of a pass (k == 0, !ex_accumulate) is +0 + blk, not blk
++      //  - mvout: out = acc * acc_scale (float32 RNE), stored as FP32 row-major into the scratchpad at C_spad
++      const int TM = 2 * DIM, TN = 2 * DIM;
++      const uint32_t B_sp = gemmini_state.mx_loop_b_spad - (uint32_t)TK * TJ * DIM;
++      const int M_DIM = TI * TM;
++      const int N_DIM = TJ * TN;
++      auto acc_idx = [&](int r, int c) -> size_t { return smem_base + 2 * ((size_t)r * N_DIM + c); };
++      for (uint16_t k_outer = 0; k_outer < TK; k_outer++) {
++        for (uint16_t j = 0; j < TJ; j++) {
++          for (uint16_t i = 0; i < TI; i++) {
++            const uint32_t A_t = A_sp + (i * TK + k_outer) * DIM;
++            const uint32_t B_t = B_sp + (k_outer * TJ + j) * DIM;
++            std::vector<int32_t> isum((size_t)TM * TN, 0);
++            for (int kk = 0; kk < DIM; kk++) {
++              int a[2 * DIM], b[2 * DIM];
++              for (int m = 0; m < TM; m++) {
++                uint8_t byte = (uint8_t)gemmini_state.spad.at(A_t + (m >> 1)).at(kk);
++                a[m] = nvfp4::e2m1_int2((m & 1) ? ((byte >> 4) & 0xF) : (byte & 0xF));
++              }
++              for (int n = 0; n < TN; n++) {
++                uint8_t byte = (uint8_t)gemmini_state.spad.at(B_t + kk).at(n >> 1);
++                b[n] = nvfp4::e2m1_int2((n & 1) ? ((byte >> 4) & 0xF) : (byte & 0xF));
++              }
++              for (int r = 0; r < TM; r++)
++                for (int c = 0; c < TN; c++) isum[(size_t)r * TN + c] += a[r] * b[c];
++            }
++            for (int r = 0; r < TM; r++)
++              for (int c = 0; c < TN; c++) {
++                // NVFP4 scale blocks are 16 elements = one K tile: scale row = k_outer (MX uses k_outer*DIM/32)
++                const size_t a_off = gemmini_state.mx_scale_act_sel * 4096 + (size_t)k_outer * M_DIM + (size_t)(i * TM + r);
++                const size_t b_off = gemmini_state.mx_scale_wgt_sel * 4096 + (size_t)k_outer * N_DIM + (size_t)(j * TN + c);
++                const uint8_t sa = (a_off < gemmini_state.mx_scale_a_mem.size()) ? gemmini_state.mx_scale_a_mem[a_off] : 0x7f;
++                const uint8_t sb = (b_off < gemmini_state.mx_scale_b_mem.size()) ? gemmini_state.mx_scale_b_mem[b_off] : 0x7f;
++                const uint32_t blk = nvfp4::scale_stage(isum[(size_t)r * TN + c], sa, sb);
++                const size_t idx = acc_idx(i * TM + r, j * TN + c);
++                if (idx + 1 >= gemmini_state.mx_smem.size()) continue;
++                const uint32_t prev = (uint32_t)gemmini_state.mx_smem[idx] | ((uint32_t)gemmini_state.mx_smem[idx + 1] << 16);
++                const uint32_t acc = nvfp4::acc_update(k_outer == 0 && !ex_accumulate, prev, blk);
++                gemmini_state.mx_smem[idx] = (uint16_t)(acc & 0xFFFF);
++                gemmini_state.mx_smem[idx + 1] = (uint16_t)(acc >> 16);
++              }
++          }
++        }
++      }
++      // mvout with the tensor factor: FP32 RNE multiply by acc_scale (bits as configured by CONFIG_ST rs2[63:32])
++      const uint32_t factor = nvfp4::f32_bits((float)gemmini_state.acc_shift);
++      const size_t out_bytes = (size_t)M_DIM * N_DIM * 4;
++      const size_t need = (size_t)C_spad + (out_bytes + DIM - 1) / DIM + 1;
++      if (gemmini_state.spad.size() < need)
++        gemmini_state.spad.resize(need, std::vector<elem_t>(DIM, 0));
++      for (int r = 0; r < M_DIM; r++)
++        for (int c = 0; c < N_DIM; c++) {
++          const size_t idx = acc_idx(r, c);
++          if (idx + 1 >= gemmini_state.mx_smem.size()) continue;
++          const uint32_t acc = (uint32_t)gemmini_state.mx_smem[idx] | ((uint32_t)gemmini_state.mx_smem[idx + 1] << 16);
++          const uint32_t out = nvfp4::f32_mul(acc, factor);
++          const size_t e = (size_t)r * N_DIM + c;
++          for (int byte = 0; byte < 4; byte++) {
++            const size_t k = 4 * e + byte;
++            gemmini_state.spad[(size_t)C_spad + k / DIM][k % DIM] = (elem_t)((out >> (8 * byte)) & 0xFF);
++          }
++        }
++      return;
++    }
++#endif
+     // FP4 ACTIVATION (quad, 2 rows/lane). WEIGHT is quad (nibble, TN=32) OR E4M3-single (direct 8-bit,
+     // TN=16 -> 32x16 dual-throughput tile, mode2). wgt_single = fp8/code0, altfmt0, no weight LUT.
+     const bool wgt_single = (wgtf == 0) && !gemmini_state.mx_wgt_altfmt && !gemmini_state.mx_lut_b_loaded;
+@@ -2927,7 +3018,7 @@ void gemmini_t::counter_increment_random() {
+ }
+ 
+ static reg_t gemmini_custom(processor_t* p, insn_t insn, reg_t pc) {
+-  gemmini_t* gemmini = static_cast<gemmini_t*>(p->get_extension("gemmini"));
++  gemmini_t* gemmini = static_cast<gemmini_t*>(p->get_extension(GEMMINI_EXT_NAME));
+   rocc_insn_union_t u;
+   state_t* state = p->get_state();
+   gemmini->set_processor(p);
+diff --git a/nvfp4_math.h b/nvfp4_math.h
+new file mode 100644
+index 0000000..e06a8c2
+--- /dev/null
++++ b/nvfp4_math.h
+@@ -0,0 +1,58 @@
++// NVFP4 bit-exact arithmetic for the Gemmini NVFP4 hardware model (libgemmini_nvfp4, -DGEMMINI_NVFP4).
++// Mirrors refmodel/scale_stage.py and refmodel/hw_dot.py (nvfp4 project, M6.3A/C):
++//   per 16-element K block: exact integer column sum of doubled-E2M1 products   (|isum| <= 2304)
++//   blk  = (float32(isum) * sA) * sB          E4M3 scales, exact in float32; NaN scale code -> canonical qNaN
++//   acc  = acc + blk                          float32 RNE, K blocks ascending; the first write of a pass is +0 + blk
++//   out  = acc * factor                       float32 RNE, factor = (tA*tB)*0.25f supplied through acc_scale
++// Header-only and free of Spike types, so the host unit check (nvfp4_unit.cc) links the same code.
++#ifndef NVFP4_MATH_H
++#define NVFP4_MATH_H
++
++#include <stdint.h>
++#include <string.h>
++#include <math.h>
++
++namespace nvfp4 {
++
++static const uint32_t QNAN = 0x7FC00000u;
++
++static inline uint32_t f32_bits(float x) { uint32_t u; memcpy(&u, &x, sizeof u); return u; }
++static inline float bits_f32(uint32_t u) { float x; memcpy(&x, &u, sizeof x); return x; }
++// every NaN becomes the canonical quiet NaN (what the hardfloat datapath produces)
++static inline uint32_t canon(float x) { return isnan(x) ? QNAN : f32_bits(x); }
++
++// E2M1 code (sign bit 3, magnitude 0..7) -> doubled integer: 0,1,2,3,4,6,8,12 (refmodel INT2)
++static inline int e2m1_int2(uint8_t code) {
++  static const int INT2[8] = {0, 1, 2, 3, 4, 6, 8, 12};
++  const int mag = INT2[code & 7];
++  return (code & 8) ? -mag : mag;
++}
++
++// E4M3 (s eeee mmm): e == 0 subnormal m/8 * 2^-6; 0x7F / 0xFF are NaN. Exact in float32.
++static inline bool e4m3_is_nan(uint8_t c) { return (c & 0x7F) == 0x7F; }
++static inline float e4m3_decode(uint8_t c) {
++  const int e = (c >> 3) & 15, m = c & 7;
++  const float mag = e ? ldexpf((float)(8 + m), e - 10) : ldexpf((float)m, -9);
++  return (c & 0x80) ? -mag : mag;
++}
++
++// Block value: (float(isum) * sA) * sB, the refmodel order. A NaN scale code gives the canonical qNaN.
++static inline uint32_t scale_stage(int32_t isum, uint8_t sa, uint8_t sb) {
++  if (e4m3_is_nan(sa) || e4m3_is_nan(sb)) return QNAN;
++  const float x = ((float)isum * e4m3_decode(sa)) * e4m3_decode(sb);
++  return canon(x);
++}
++
++// float32 add / multiply on bit patterns, RNE, NaN canonical
++static inline uint32_t f32_add(uint32_t a, uint32_t b) { return canon(bits_f32(a) + bits_f32(b)); }
++static inline uint32_t f32_mul(uint32_t a, uint32_t b) { return canon(bits_f32(a) * bits_f32(b)); }
++
++// Accumulate one block into the accumulator. first = the first write of a pass (acc = false in the RTL):
++// the hardware still adds it to +0 through the FP32 adder (so a -0 block becomes +0), it does not store it directly.
++static inline uint32_t acc_update(bool first, uint32_t prev, uint32_t blk) {
++  return f32_add(first ? 0u : prev, blk);
++}
++
++}  // namespace nvfp4
++
++#endif
+diff --git a/nvfp4_unit.cc b/nvfp4_unit.cc
+new file mode 100644
+index 0000000..0c3c44f
+--- /dev/null
++++ b/nvfp4_unit.cc
+@@ -0,0 +1,49 @@
++// Host unit check of the NVFP4 model (nvfp4_math.h) against the refmodel vectors (M6.4 D3).
++//   usage: nvfp4_unit <scale_stage.txt.gz> <acc_seq.txt.gz>
++// scale_stage lines: "isum sA sB expected_bits_hex"; acc_seq: "S" starts a sequence, then "isum sA sB acc_bits_hex" per block
++// (acc after that block, from +0, float32 order). The accumulate check feeds the model's OWN scale_stage output into acc_update.
++#include "nvfp4_math.h"
++#include <stdio.h>
++#include <stdlib.h>
++#include <string>
++
++static FILE *open_gz(const char *path) {
++  std::string cmd = std::string("gzip -dc '") + path + "'";
++  FILE *f = popen(cmd.c_str(), "r");
++  if (!f) { perror("popen"); exit(2); }
++  return f;
++}
++
++int main(int argc, char **argv) {
++  if (argc < 3) { fprintf(stderr, "usage: %s scale_stage.txt.gz acc_seq.txt.gz\n", argv[0]); return 2; }
++  long n = 0, bad = 0;
++  char line[256];
++  FILE *f = open_gz(argv[1]);
++  while (fgets(line, sizeof line, f)) {
++    int isum, sa, sb; unsigned exp;
++    if (sscanf(line, "%d %d %d %x", &isum, &sa, &sb, &exp) != 4) { fprintf(stderr, "bad line: %s", line); return 2; }
++    uint32_t got = nvfp4::scale_stage(isum, (uint8_t)sa, (uint8_t)sb);
++    n++;
++    if (got != exp) { if (bad < 8) printf("SCALE MISMATCH isum=%d sA=%d sB=%d got %08x want %08x\n", isum, sa, sb, got, exp); bad++; }
++  }
++  pclose(f);
++  printf("scale_stage: %ld vectors, %ld mismatches\n", n, bad);
++  long total_bad = bad;
++
++  long seqs = 0, blocks = 0; bad = 0;
++  f = open_gz(argv[2]);
++  uint32_t acc = 0; int idx = 0;
++  while (fgets(line, sizeof line, f)) {
++    if (line[0] == 'S') { seqs++; idx = 0; acc = 0; continue; }
++    int isum, sa, sb; unsigned exp;
++    if (sscanf(line, "%d %d %d %x", &isum, &sa, &sb, &exp) != 4) { fprintf(stderr, "bad line: %s", line); return 2; }
++    acc = nvfp4::acc_update(idx == 0, acc, nvfp4::scale_stage(isum, (uint8_t)sa, (uint8_t)sb));
++    blocks++; idx++;
++    if (acc != exp) { if (bad < 8) printf("ACC MISMATCH seq %ld block %d got %08x want %08x\n", seqs, idx - 1, acc, exp); bad++; }
++  }
++  pclose(f);
++  printf("acc_seq: %ld sequences, %ld blocks, %ld mismatches\n", seqs, blocks, bad);
++  total_bad += bad;
++  printf("nvfp4_unit: %s\n", total_bad == 0 ? "PASS" : "FAIL");
++  return total_bad != 0;
++}
+-- 
+2.34.1
+

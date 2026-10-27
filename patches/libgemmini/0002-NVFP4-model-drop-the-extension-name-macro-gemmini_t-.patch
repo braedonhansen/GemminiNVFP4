@@ -1,0 +1,45 @@
+From 03f8eeaf054017539cc02da27a4f7594f038bea7 Mon Sep 17 00:00:00 2001
+From: Braedonhansen <braedon.hansen@gmail.com>
+Date: Tue, 20 Oct 2026 18:47:28 -0700
+Subject: [PATCH 2/3] NVFP4 model: drop the extension-name macro
+ (gemmini_t::name() is 'gemmini' in every variant, so the lookup in
+ gemmini_custom needs no change)
+
+---
+ gemmini.cc | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/gemmini.cc b/gemmini.cc
+index 9e5254f..01c3089 100644
+--- a/gemmini.cc
++++ b/gemmini.cc
+@@ -21,7 +21,6 @@ using namespace std;
+ #ifdef GEMMINI_NVFP4
+ // NVFP4 hardware model (libgemmini_nvfp4.so), registered as extension "gemmini_nvfp4":
+ // run with `spike --extension=gemmini_nvfp4 ...`
+-#define GEMMINI_EXT_NAME "gemmini_nvfp4"
+ REGISTER_EXTENSION(gemmini_nvfp4, []() { return new gemmini_t; })
+ #elif GEMMINI_DIM == 32
+ REGISTER_EXTENSION(gemmini_dim32, []() { return new gemmini_t; })
+@@ -30,9 +29,6 @@ REGISTER_EXTENSION(gemmini_dim8, []() { return new gemmini_t; })
+ #else
+ REGISTER_EXTENSION(gemmini, []() { return new gemmini_t; })
+ #endif
+-#ifndef GEMMINI_EXT_NAME
+-#define GEMMINI_EXT_NAME "gemmini"
+-#endif
+ 
+ #define dprintf(...) { if (p->get_log_commits_enabled()) printf(__VA_ARGS__); }
+ 
+@@ -3018,7 +3014,7 @@ void gemmini_t::counter_increment_random() {
+ }
+ 
+ static reg_t gemmini_custom(processor_t* p, insn_t insn, reg_t pc) {
+-  gemmini_t* gemmini = static_cast<gemmini_t*>(p->get_extension(GEMMINI_EXT_NAME));
++  gemmini_t* gemmini = static_cast<gemmini_t*>(p->get_extension("gemmini"));
+   rocc_insn_union_t u;
+   state_t* state = p->get_state();
+   gemmini->set_processor(p);
+-- 
+2.34.1
+

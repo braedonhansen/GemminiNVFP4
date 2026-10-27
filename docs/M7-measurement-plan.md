@@ -129,7 +129,7 @@ The user has Cadence access on school servers, currently used for Virtuoso throu
   - A MobaXterm plugin is a separate project and only needed if direct SSH isn't allowed (e.g. a gateway that only allows interactive sessions).
   - Check the school's rules on automated jobs and on publishing results from a foundry PDK. NDAs often allow normalized or relative numbers but not absolute ones.
 
-**Inventory found (2026-10-21, USC server `the school server`):**
+**Inventory found (2026-10-21, school Cadence server):**
 - Setup: `tcsh; source ~/setup_ee477_ee577a_v2602.csh` (course EE477/EE577A). It only puts Virtuoso (`/tools/cadence/IC251`) on the path.
 - `/tools/cadence`:
   - CONFRML252
@@ -150,8 +150,8 @@ The user has Cadence access on school servers, currently used for Virtuoso throu
   - `NCSU45PDK` (FreePDK45, open)
   - the course's GPDK045 (`~/work_gpdk045`, library path not yet located)
 - Licences:
-  - `LM_LICENSE_FILE=<school Cadence licence servers>`
-  - `SNPSLMD_LICENSE_FILE=<school Synopsys licence server>`
+  - `LM_LICENSE_FILE` set to the school Cadence licence servers
+  - `SNPSLMD_LICENSE_FILE` set to the school Synopsys licence server
 - **Genus 25.1 runs**: `/tools/cadence/DDI251/GENUS251/bin/genus -no_gui -batch -execute "puts GENUS_OK; exit"` printed GENUS_OK and checked out `Genus_Synthesis`.
 - **Joules runs** (`/tools/cadence/DDI251/JSTUDIO251/bin/joules`, checked out `Joules_XL`). **Innovus 25.1 runs** (`/tools/cadence/DDI251/INNOVUS251/bin/innovus`).
 - **PDK default (user, 2026-10-21): FreePDK45** (public, so results are publishable and reproducible), with Nangate Open Cell Library standard cells and OpenRAM SRAM macros. It changes if the professor names another PDK.

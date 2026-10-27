@@ -1,0 +1,30 @@
+From 9555cda46dd431cd89a8c3281f15a046c4269035 Mon Sep 17 00:00:00 2001
+From: Braedonhansen <braedon.hansen@gmail.com>
+Date: Tue, 20 Oct 2026 18:53:29 -0700
+Subject: [PATCH 3/3] nvfp4_unit: fail when no vectors were checked (missing or
+ empty input files)
+
+---
+ nvfp4_unit.cc | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/nvfp4_unit.cc b/nvfp4_unit.cc
+index 0c3c44f..fdbf086 100644
+--- a/nvfp4_unit.cc
++++ b/nvfp4_unit.cc
+@@ -44,6 +44,10 @@ int main(int argc, char **argv) {
+   pclose(f);
+   printf("acc_seq: %ld sequences, %ld blocks, %ld mismatches\n", seqs, blocks, bad);
+   total_bad += bad;
+-  printf("nvfp4_unit: %s\n", total_bad == 0 ? "PASS" : "FAIL");
+-  return total_bad != 0;
++  // An empty or missing vector file must not pass: require that every check actually ran.
++  bool ran = n > 0 && blocks > 0;
++  if (!ran) printf("nvfp4_unit: checked nothing (scale vectors %ld, acc blocks %ld)\n", n, blocks);
++  bool ok = ran && total_bad == 0;
++  printf("nvfp4_unit: %s\n", ok ? "PASS" : "FAIL");
++  return ok ? 0 : 1;
+ }
+-- 
+2.34.1
+

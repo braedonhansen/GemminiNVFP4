@@ -1,0 +1,274 @@
+From b800fd689a9d8a96dd85b65df55850a43992c542 Mon Sep 17 00:00:00 2001
+From: Braedonhansen <braedon.hansen@gmail.com>
+Date: Sun, 18 Oct 2026 14:58:09 -0700
+Subject: [PATCH 4/4] NVFP4 FP32 mvout with the tensor scale via acc_scale
+ (M6.3C)
+
+- AccumulatorScale (use_nvfp4): every DMA read of the accumulator multiplies its 4 x FP32 lanes by the FP32 acc_scale carried by the
+  read request (RNE, 2 elastic stages Fp32MulS1/Fp32MulS2 = hardfloat MulRawFN + RoundRawFNToRecFN, ported from hw/nvfp4pe Fp32Mul2),
+  before the BF16-mode passthrough of MxRequantizer
+- LoopMatmulStCSpad (out_fp32): the spad store's address math doubles for 4-byte elements (chunk 8 rows, j-group 8, row tile, row step)
+- MX configs unchanged (generated MX Verilog identical modulo source-line annotations)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/main/scala/gemmini/AccumulatorScale.scala | 60 ++++++++++++++++++-
+ src/main/scala/gemmini/Controller.scala       |  2 +-
+ src/main/scala/gemmini/Fp32Mul2.scala         | 57 ++++++++++++++++++
+ src/main/scala/gemmini/LoopMatmul.scala       | 19 +++---
+ src/main/scala/gemmini/Scratchpad.scala       |  2 +-
+ 5 files changed, 129 insertions(+), 11 deletions(-)
+ create mode 100644 src/main/scala/gemmini/Fp32Mul2.scala
+
+diff --git a/src/main/scala/gemmini/AccumulatorScale.scala b/src/main/scala/gemmini/AccumulatorScale.scala
+index d17f443a..aeab0885 100644
+--- a/src/main/scala/gemmini/AccumulatorScale.scala
++++ b/src/main/scala/gemmini/AccumulatorScale.scala
+@@ -102,7 +102,8 @@ class AccumulatorScale[T <: Data, U <: Data](
+   num_scale_units: Int,
+   latency: Int,
+   has_nonlinear_activations: Boolean, has_normalizations: Boolean,
+-  use_mx_scaling: Boolean)(implicit ev: Arithmetic[T]) extends Module {
++  use_mx_scaling: Boolean,
++  use_nvfp4: Boolean = false)(implicit ev: Arithmetic[T]) extends Module {
+ 
+   import ev._
+ 
+@@ -158,12 +159,69 @@ class AccumulatorScale[T <: Data, U <: Data](
+       val mx_act_data = if (has_nonlinear_activations)
+         VecInit(acc_read_data.map(v => VecInit(v.map(e => Mux(act === Activation.RELU, e.relu, e)))))
+       else acc_read_data
++      if (use_nvfp4) {
++        // NVFP4 mvout (M6.3C): every accumulator lane is an IEEE FP32; a DMA read (mvout) multiplies each lane by the FP32
++        // `acc_scale` that rode along with the read request (tensor scale: out = acc * ((tA*tB)*0.25f), computed in software),
++        // RNE, in two elastic stages (Fp32MulS1: recode + MulRawFN; Fp32MulS2: round + un-recode). Non-DMA reads pass
++        // through x 1.0f (exact). The scaled chunk then takes the normal BF16-mode passthrough of MxRequantizer.
++        val nLanes = mx_act_data.length * mx_act_data.head.length * 4
++        class NvMulStage1 extends Bundle {
++          val raw = Vec(nLanes, new hardfloat.RawFloat(8, 26))
++          val invalid = Vec(nLanes, Bool())
++          val fromDMA = Bool()
++          val chunk_id = UInt(GemminiISA.MX_CHUNK_ID_BITS.W)
++          val acc_bank_id = UInt(2.W)
++        }
++        class NvMulStage2 extends Bundle {
++          val data = Vec(nLanes, UInt(32.W))
++          val fromDMA = Bool()
++          val chunk_id = UInt(GemminiISA.MX_CHUNK_ID_BITS.W)
++          val acc_bank_id = UInt(2.W)
++        }
++        val lanes = VecInit(mx_act_data.flatMap(v => v.map(_.asUInt)).flatMap(x => (0 until 4).map(j => x(32 * j + 31, 32 * j))))
++        val scaleBits = io.in.bits.acc_read_resp.scale.asUInt
++        val factor = Mux(io.in.bits.acc_read_resp.fromDMA, scaleBits, "h3f800000".U(32.W))
++        val s1 = Seq.fill(nLanes)(Module(new Fp32MulS1))
++        val in1 = Wire(Decoupled(new NvMulStage1))
++        in1.valid := io.in.valid
++        io.in.ready := in1.ready
++        for (l <- 0 until nLanes) {
++          s1(l).io.a := lanes(l)
++          s1(l).io.b := factor
++          in1.bits.raw(l) := s1(l).io.raw
++          in1.bits.invalid(l) := s1(l).io.invalid
++        }
++        in1.bits.fromDMA := io.in.bits.acc_read_resp.fromDMA
++        in1.bits.chunk_id := io.in.bits.acc_read_resp.chunk_id
++        in1.bits.acc_bank_id := io.in.bits.acc_read_resp.acc_bank_id
++        val out1 = Pipeline(in1, 1)
++        val s2 = Seq.fill(nLanes)(Module(new Fp32MulS2))
++        val in2 = Wire(Decoupled(new NvMulStage2))
++        in2.valid := out1.valid
++        out1.ready := in2.ready
++        for (l <- 0 until nLanes) {
++          s2(l).io.raw := out1.bits.raw(l)
++          s2(l).io.invalid := out1.bits.invalid(l)
++          in2.bits.data(l) := s2(l).io.out
++        }
++        in2.bits.fromDMA := out1.bits.fromDMA
++        in2.bits.chunk_id := out1.bits.chunk_id
++        in2.bits.acc_bank_id := out1.bits.acc_bank_id
++        val out2 = Pipeline(in2, 1)
++        io.mx_req_io.mx_data_in.valid := out2.valid
++        out2.ready := io.mx_req_io.mx_data_in.ready
++        io.mx_req_io.mx_data_in.bits.full_mx_data_in := out2.bits.data.asUInt.asTypeOf(mx_act_data)
++        io.mx_req_io.mx_data_in.bits.fromDMA := out2.bits.fromDMA
++        io.mx_req_io.mx_data_in.bits.chunk_id := out2.bits.chunk_id
++        io.mx_req_io.mx_data_in.bits.acc_bank_id := out2.bits.acc_bank_id
++      } else {
+       io.mx_req_io.mx_data_in.valid := io.in.valid
+       io.in.ready := io.mx_req_io.mx_data_in.ready
+       io.mx_req_io.mx_data_in.bits.full_mx_data_in := mx_act_data
+       io.mx_req_io.mx_data_in.bits.fromDMA := io.in.bits.acc_read_resp.fromDMA
+       io.mx_req_io.mx_data_in.bits.chunk_id := io.in.bits.acc_read_resp.chunk_id
+       io.mx_req_io.mx_data_in.bits.acc_bank_id := io.in.bits.acc_read_resp.acc_bank_id
++      }
+       io.mx_req_io.mx_mode := io.output_mx_format
+       io.mx_req_io.mx_fp8_altfmt := io.mx_fp8_altfmt
+ 
+diff --git a/src/main/scala/gemmini/Controller.scala b/src/main/scala/gemmini/Controller.scala
+index d8e47e4a..55ee23c2 100644
+--- a/src/main/scala/gemmini/Controller.scala
++++ b/src/main/scala/gemmini/Controller.scala
+@@ -1135,7 +1135,7 @@ class GemminiModule[T <: Data: Arithmetic, U <: Data, V <: Data]
+     new PreloadRs(mvin_rows_bits, mvin_cols_bits, local_addr_t), new PreloadRs(mvout_rows_bits, mvout_cols_bits, local_addr_t),
+     new ComputeRs(mvin_rows_bits, mvin_cols_bits, local_addr_t), new ComputeRs(mvin_rows_bits, mvin_cols_bits, local_addr_t),
+     new MvoutSpadRs1(32, local_addr_t), new MvoutRs2(mvout_rows_bits, mvout_cols_bits, local_addr_t),
+-    vec_bypass = has_vpu || has_spad_requant, scale_size = scaleSize) }
++    vec_bypass = has_vpu || has_spad_requant, scale_size = scaleSize, out_fp32 = use_nvfp4) }
+   
+   if (use_mx_scaling) {
+     loop_matmul.io.activation_mx_format := ex_controller.io.mx.get.activation_mx_format_out
+diff --git a/src/main/scala/gemmini/Fp32Mul2.scala b/src/main/scala/gemmini/Fp32Mul2.scala
+new file mode 100644
+index 00000000..94639324
+--- /dev/null
++++ b/src/main/scala/gemmini/Fp32Mul2.scala
+@@ -0,0 +1,57 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++import hardfloat.{MulRawFN, RawFloat, RoundRawFNToRecFN, fNFromRecFN, rawFloatFromRecFN, recFNFromFN}
++
++/** Stage 1 of the mvout tensor-scale multiplier (combinational): IEEE FP32 x IEEE FP32 -> recode -> raw operands ->
++  * MulRawFN (24x24 significand product folded to a 26-bit sticky form). Output is the unrounded raw product plus the
++  * invalid flag. RNE only. M6.3 Phase C (C1). */
++class Fp32MulS1 extends Module {
++  val io = IO(new Bundle {
++    val a = Input(UInt(32.W))
++    val b = Input(UInt(32.W))
++    val raw = Output(new RawFloat(8, 26))
++    val invalid = Output(Bool())
++  })
++  val mul = Module(new MulRawFN(8, 24))
++  mul.io.a := rawFloatFromRecFN(8, 24, recFNFromFN(8, 24, io.a))
++  mul.io.b := rawFloatFromRecFN(8, 24, recFNFromFN(8, 24, io.b))
++  io.raw := mul.io.rawOut
++  io.invalid := mul.io.invalidExc
++}
++
++/** Stage 2 (combinational): round the raw product to FP32 (RNE, tininess detected after rounding) and convert back to
++  * IEEE bits. NaN out is canonical 0x7FC00000. Together with `Fp32MulS1` this is hardfloat's MulRecFN split at the raw
++  * boundary, with the recode/un-recode around it. */
++class Fp32MulS2 extends Module {
++  val io = IO(new Bundle {
++    val raw = Input(new RawFloat(8, 26))
++    val invalid = Input(Bool())
++    val out = Output(UInt(32.W))
++  })
++  val rnd = Module(new RoundRawFNToRecFN(8, 24, 0))
++  rnd.io.invalidExc := io.invalid
++  rnd.io.infiniteExc := false.B
++  rnd.io.in := io.raw
++  rnd.io.roundingMode := 0.U // round_near_even
++  rnd.io.detectTininess := true.B
++  io.out := fNFromRecFN(8, 24, rnd.io.out)
++}
++
++/** FP32 x FP32 -> FP32 (RNE) multiplier pipelined into 2 stages; used at mvout to apply the tensor scale
++  * (`out = acc * ((tA*tB)*0.25f)`, acc_scale path). Latency 2: operands in cycle c give `out` in cycle c+2. Free running. */
++class Fp32Mul2 extends Module {
++  val io = IO(new Bundle {
++    val a = Input(UInt(32.W))
++    val b = Input(UInt(32.W))
++    val out = Output(UInt(32.W))
++  })
++  val s1 = Module(new Fp32MulS1)
++  val s2 = Module(new Fp32MulS2)
++  s1.io.a := io.a
++  s1.io.b := io.b
++  s2.io.raw := RegNext(s1.io.raw)
++  s2.io.invalid := RegNext(s1.io.invalid)
++  io.out := RegNext(s2.io.out)
++}
+diff --git a/src/main/scala/gemmini/LoopMatmul.scala b/src/main/scala/gemmini/LoopMatmul.scala
+index 6cf1da79..18880724 100644
+--- a/src/main/scala/gemmini/LoopMatmul.scala
++++ b/src/main/scala/gemmini/LoopMatmul.scala
+@@ -791,8 +791,11 @@ class LoopMatmulStCSpadReq(val block_size: Int, val iterator_bitwidth: Int, val
+ 
+ class LoopMatmulStCSpad(block_size: Int, iterator_bitwidth: Int, max_addr: Int, max_acc_addr: Int,
+                         input_w: Int, acc_w: Int, max_block_len: Int, concurrent_loops: Int, tilesPerMxBlock: Int,
+-                        mvout_spad_rs1_t: MvoutSpadRs1, mvout_rs2_t: MvoutRs2)
++                        mvout_spad_rs1_t: MvoutSpadRs1, mvout_rs2_t: MvoutRs2, out_fp32: Boolean = false)
+                    (implicit p: Parameters) extends Module {
++  // out_fp32 (NVFP4): the BF16-mode spad store carries 4 x FP32 per 128-bit entry, so every spad-row distance derived from the
++  // BF16 layout (2 bytes per element) doubles (4 bytes per element): chunk, j-group, row-tile and row steps.
++  val fp32x = if (out_fp32) 2 else 1
+   val io = IO(new Bundle {
+     val req = Flipped(Decoupled(new LoopMatmulStCSpadReq(block_size, iterator_bitwidth, max_addr, max_acc_addr, concurrent_loops)))
+     val cmd = Decoupled(Output(new RoCCCommand))
+@@ -837,7 +840,7 @@ class LoopMatmulStCSpad(block_size: Int, iterator_bitwidth: Int, max_addr: Int,
+   // spad-row span = tilesPerMxBlock (mxBlockSize/DIM: 2 at DIM16, 4 at DIM8). Hardcoded 2 only held at DIM16;
+   // at DIM=8 a block spans 4 rows so +2 overwrote block0's beats 2-3. Gate on DIM<16 to keep DIM>=16 identical.
+   val single_chunk_stride = if (block_size < 16) tilesPerMxBlock else 2
+-  val chunk_spad_stride = Mux(req.output_mx_format === 3.U || req.full_c, (2 * tilesPerMxBlock).U,
++  val chunk_spad_stride = Mux(req.output_mx_format === 3.U || req.full_c, (if (out_fp32) 8 else 2 * tilesPerMxBlock).U,
+     Mux(req.reuse_tiled && req.output_mx_format === 0.U, (block_size * tilesPerMxBlock).U, single_chunk_stride.U))
+ 
+   val max_blocks = Mux(req.full_c, 1.U, Mux(iter_max_j <= max_block_len.U, iter_max_j, max_block_len.U))
+@@ -872,7 +875,7 @@ class LoopMatmulStCSpad(block_size: Int, iterator_bitwidth: Int, max_addr: Int,
+     // (mode6/7) H=16 -> i*max_j*block_size*4. The old x8-only assumed quad and doubled the act-single
+     // i-stride (tiles i>=1 landed at 2x -> rows>=16 garbage). Gate the height on mx_multi_elem_act.
+     // j-term: J-tile = 2*DIM bf16 cols = 4*DIM B = 4 flat spad rows at every DIM.
+-    ((req.mx_multi_elem) && (req.output_mx_format === 3.U)) -> ((i*req.max_j)*block_size.U*Mux(req.mx_multi_elem_act, 8.U, 4.U) + j * 4.U)
++    ((req.mx_multi_elem) && (req.output_mx_format === 3.U)) -> ((i*req.max_j)*block_size.U*Mux(req.mx_multi_elem_act, (8 * fp32x).U, (4 * fp32x).U) + j * (4 * fp32x).U)
+     ))
+   val dst_addr = Mux(!req.mx_multi_elem,
+     req.dst_addr + dst_offset + chunk_id * chunk_spad_stride,
+@@ -904,7 +907,7 @@ class LoopMatmulStCSpad(block_size: Int, iterator_bitwidth: Int, max_addr: Int,
+   val st_wide = req.output_mx_format === 3.U
+   val st_row_step = Mux(req.reuse_tiled, 1.U,
+     Mux(st_wide && !req.mx_multi_elem, st_j / 2.U * 4.U,
+-      Mux(st_wide, st_j * Mux(req.mx_multi_elem_act, 8.U, 4.U),
++      Mux(st_wide, st_j * Mux(req.mx_multi_elem_act, (8 * fp32x).U, (4 * fp32x).U),
+         Mux(!req.mx_multi_elem, st_j / 2.U * 2.U, st_j * 2.U))))
+   mvout_cmd_rs1.stride := (BigInt(1) << 31).U | st_row_step.pad(31)
+   mvout_cmd.rs1 := mvout_cmd_rs1.asUInt
+@@ -1100,7 +1103,7 @@ class LoopMatmul(block_size: Int, coreMaxAddrBits: Int, reservation_station_size
+                  max_addr: Int, max_acc_addr: Int, input_w: Int, acc_w: Int, dma_max_bytes: Int,
+                  mvin_rs2_t: MvinRs2, preload_rs1_t: PreloadRs, preload_rs2_t: PreloadRs,
+                  compute_rs1_t: ComputeRs, compute_rs2_t: ComputeRs, mvout_spad_rs1_t: MvoutSpadRs1, mvout_rs2_t: MvoutRs2,
+-                 vec_bypass: Boolean = false, scale_size: Int = 32)
++                 vec_bypass: Boolean = false, scale_size: Int = 32, out_fp32: Boolean = false)
+                 (implicit p: Parameters) extends Module {
+   val iterator_bitwidth = 16
+   // k-tiles per scale block: scale_size / DIM (MX: 32/16 = 2; NVFP4: scaleSize 16 -> 1)
+@@ -1159,7 +1162,7 @@ class LoopMatmul(block_size: Int, coreMaxAddrBits: Int, reservation_station_size
+   val ex = Module(new LoopMatmulExecute(block_size, coreMaxAddrBits, iterator_bitwidth, max_addr, max_acc_addr, concurrent_loops, preload_rs1_t, preload_rs2_t, compute_rs1_t, compute_rs2_t))
+   // max_block_len 1 (as stC_spad): an MX mvout covers one 4-tile j-group; wider would skip groups.
+   val stC = Module(new LoopMatmulStC(block_size, coreMaxAddrBits, iterator_bitwidth, max_acc_addr, input_w, acc_w, 1, concurrent_loops, tilesPerMxBlock, mvout_rs2_t))
+-  val stC_spad = Module(new LoopMatmulStCSpad(block_size, iterator_bitwidth, max_addr, max_acc_addr, input_w, acc_w, 1, concurrent_loops, tilesPerMxBlock, mvout_spad_rs1_t, mvout_rs2_t))
++  val stC_spad = Module(new LoopMatmulStCSpad(block_size, iterator_bitwidth, max_addr, max_acc_addr, input_w, acc_w, 1, concurrent_loops, tilesPerMxBlock, mvout_spad_rs1_t, mvout_rs2_t, out_fp32))
+ 
+   // Create command queue
+   val cmd = Queue(io.in)
+@@ -1759,11 +1762,11 @@ object LoopMatmul {
+             max_addr: Int, max_acc_addr: Int, input_w: Int, acc_w: Int, dma_max_bytes: Int,
+             mvin_rs2_t: MvinRs2, preload_rs1_t: PreloadRs, preload_rs2_t: PreloadRs,
+             compute_rs1_t: ComputeRs, compute_rs2_t: ComputeRs, mvout_spad_rs1_t: MvoutSpadRs1, mvout_rs2_t: MvoutRs2,
+-            vec_bypass: Boolean = false, scale_size: Int = 32)
++            vec_bypass: Boolean = false, scale_size: Int = 32, out_fp32: Boolean = false)
+            (implicit p: Parameters): (DecoupledIO[GemminiCmd], Bool, Vec[Bool], LoopMatmul) = {
+     val mod = Module(new LoopMatmul(block_size, coreMaxAddrBits, rob_size, max_lds, max_exs, max_sts,
+       max_addr, max_acc_addr, input_w, acc_w, dma_max_bytes,
+-      mvin_rs2_t, preload_rs1_t, preload_rs2_t, compute_rs1_t, compute_rs2_t, mvout_spad_rs1_t, mvout_rs2_t, vec_bypass, scale_size))
++      mvin_rs2_t, preload_rs1_t, preload_rs2_t, compute_rs1_t, compute_rs2_t, mvout_spad_rs1_t, mvout_rs2_t, vec_bypass, scale_size, out_fp32))
+     mod.io.in <> in
+     mod.io.ld_completed := ld_completed
+     mod.io.st_completed := st_completed
+diff --git a/src/main/scala/gemmini/Scratchpad.scala b/src/main/scala/gemmini/Scratchpad.scala
+index e694cd20..cb4e88c1 100644
+--- a/src/main/scala/gemmini/Scratchpad.scala
++++ b/src/main/scala/gemmini/Scratchpad.scala
+@@ -509,7 +509,7 @@ class Scratchpad[T <: Data, U <: Data, V <: Data](config: GemminiArrayConfig[T,
+       acc_scale_num_units,
+       acc_scale_latency,
+       has_nonlinear_activations,
+-      has_normalizations, config.use_mx_scaling
++      has_normalizations, config.use_mx_scaling, config.use_nvfp4
+     ))
+     // DIM=8 widen: acc_w uses block_cols (=meshColumns, un-widened) so acc_w/numChunks would be half a chunk
+     // (256b) and truncate the 512b chunk -> base the write width on accCols (the widened row). Byte-identical for
+-- 
+2.34.1
+

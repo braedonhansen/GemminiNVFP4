@@ -1,0 +1,1230 @@
+From 631d011027bf00baf3254be16f814b4501d7afe1 Mon Sep 17 00:00:00 2001
+From: Braedonhansen <braedon.hansen@gmail.com>
+Date: Sun, 18 Oct 2026 03:35:51 -0700
+Subject: [PATCH 1/4] NVFP4-only config (M6.3 Phase B): NvFp4Mesh, E4M3 scale
+ stage, pipelined FP32 accumulate
+
+- NvFp4GemminiRocketConfig (use_nvfp4): integer NvFp4Mesh behind a Mesh-shaped adapter (MeshWithDelays), accType = 4 x IEEE FP32
+- AccumulatorMem: NvFp4RmwPipe (3-stage exact scale stage + 2-stage FP32 add, RAW stall), acc_latency 6
+- ScaleFactorMem: raw E4M3 bytes (sA + 4 x sB per entry); scaleSize replaces the hardcoded 32 (ScaleFactorMem, LoopMatmul)
+- MX configs unchanged (all changes gated by use_nvfp4 / defaults)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ chipyard/GemminiConfigs.scala                 |   7 +
+ src/main/scala/gemmini/AccumulatorMem.scala   |  59 ++++++--
+ src/main/scala/gemmini/ConfigsFP.scala        |  30 ++++
+ src/main/scala/gemmini/Controller.scala       |   2 +-
+ .../scala/gemmini/ExecuteController.scala     |  21 ++-
+ src/main/scala/gemmini/Fp32AccAdd2.scala      |  58 ++++++++
+ src/main/scala/gemmini/GemminiConfigs.scala   |  14 +-
+ src/main/scala/gemmini/LoopMatmul.scala       |   9 +-
+ src/main/scala/gemmini/Mesh.scala             |  58 +++++---
+ src/main/scala/gemmini/MeshWithDelays.scala   |  10 +-
+ src/main/scala/gemmini/NvFp4Mesh.scala        | 118 +++++++++++++++
+ src/main/scala/gemmini/NvFp4MeshAdapter.scala |  50 +++++++
+ src/main/scala/gemmini/NvFp4PE.scala          |  93 ++++++++++++
+ src/main/scala/gemmini/NvFp4RmwPipe.scala     | 125 ++++++++++++++++
+ src/main/scala/gemmini/NvFp4ScaleStage.scala  | 135 ++++++++++++++++++
+ src/main/scala/gemmini/ScaleFactorMem.scala   |  46 ++++--
+ src/main/scala/gemmini/Scratchpad.scala       |  21 ++-
+ 17 files changed, 796 insertions(+), 60 deletions(-)
+ create mode 100644 src/main/scala/gemmini/Fp32AccAdd2.scala
+ create mode 100644 src/main/scala/gemmini/NvFp4Mesh.scala
+ create mode 100644 src/main/scala/gemmini/NvFp4MeshAdapter.scala
+ create mode 100644 src/main/scala/gemmini/NvFp4PE.scala
+ create mode 100644 src/main/scala/gemmini/NvFp4RmwPipe.scala
+ create mode 100644 src/main/scala/gemmini/NvFp4ScaleStage.scala
+
+diff --git a/chipyard/GemminiConfigs.scala b/chipyard/GemminiConfigs.scala
+index eb742558..84c6c048 100644
+--- a/chipyard/GemminiConfigs.scala
++++ b/chipyard/GemminiConfigs.scala
+@@ -139,6 +139,13 @@ class MxFp4OnlyGemminiRocketConfig extends Config(
+   new chipyard.config.WithSystemBusWidth(128) ++
+   new chipyard.config.AbstractConfig)
+ 
++// NVFP4-only build (M6.3): E2M1 act/weight, E4M3 block scales (16 elements), exact int sums, FP32 accumulator.
++class NvFp4GemminiRocketConfig extends Config(
++  new gemmini.GemminiNvFp4StandaloneConfig ++
++  new freechips.rocketchip.rocket.WithNHugeCores(1) ++
++  new chipyard.config.WithSystemBusWidth(128) ++
++  new chipyard.config.AbstractConfig)
++
+ class MxE3M2OnlyGemminiRocketConfig extends Config(
+   new gemmini.GemminiMxFPE3M2OnlyStandaloneConfig ++
+   new freechips.rocketchip.rocket.WithNHugeCores(1) ++
+diff --git a/src/main/scala/gemmini/AccumulatorMem.scala b/src/main/scala/gemmini/AccumulatorMem.scala
+index b53fedab..22811fa4 100644
+--- a/src/main/scala/gemmini/AccumulatorMem.scala
++++ b/src/main/scala/gemmini/AccumulatorMem.scala
+@@ -50,7 +50,8 @@ class AccumulatorWriteReq[T <: Data: Arithmetic](n: Int, t: Vec[Vec[T]]) extends
+ 
+ 
+ class AccumulatorMemIO [T <: Data: Arithmetic, U <: Data](n: Int, t: Vec[Vec[T]], scale_t: U, chunk_t: Vec[Vec[T]],
+-  acc_sub_banks: Int, use_shared_ext_mem: Boolean, use_mx_scaling: Boolean, meshRows: Int, tileRows: Int
++  acc_sub_banks: Int, use_shared_ext_mem: Boolean, use_mx_scaling: Boolean, meshRows: Int, tileRows: Int,
++  use_nvfp4: Boolean = false
+ ) extends Bundle {
+   val read = Flipped(new AccumulatorReadIO(n, t, scale_t, chunk_t))
+   val write = Flipped(Decoupled(new AccumulatorWriteReq(n, t)))
+@@ -70,7 +71,7 @@ class AccumulatorMemIO [T <: Data: Arithmetic, U <: Data](n: Int, t: Vec[Vec[T]]
+   // Shared ScalingFactorMem (one per Scratchpad): this bank's read on write fire, and the broadcast response.
+   val scale_rd_req = if (use_mx_scaling) Some(Output(Valid(new ScalingFactorReadReq(7)))) else None
+   val scale_rd_resp = if (use_mx_scaling) {
+-    Some(Input(Valid(new ScalingFactorReadResp(2*meshRows*tileRows, 2*meshRows*tileRows))))
++    Some(Input(Valid(new ScalingFactorReadResp(2*meshRows*tileRows, 2*meshRows*tileRows, if (use_nvfp4) 40 else 36))))
+   } else None
+ }
+ 
+@@ -113,6 +114,7 @@ class AccumulatorMem[T <: Data, U <: Data](
+   scale_mem: Option[GemminiScalingFactorMemConfig],
+   meshRows: Int,
+   tileRows: Int,
++  use_nvfp4: Boolean = false,
+ )
+   (implicit ev: Arithmetic[T]) extends Module {
+   // TODO Do writes in this module work with matrices of size 2? If we try to read from an address right after writing
+@@ -131,7 +133,7 @@ class AccumulatorMem[T <: Data, U <: Data](
+                 else Vec(t.length, t.head.cloneType)
+ 
+   // TODO unify this with TwoPortSyncMemIO
+-  val io = IO(new AccumulatorMemIO(n, t, scale_t, chunk_t, acc_sub_banks, use_shared_ext_mem, use_mx_scaling, meshRows, tileRows))
++  val io = IO(new AccumulatorMemIO(n, t, scale_t, chunk_t, acc_sub_banks, use_shared_ext_mem, use_mx_scaling, meshRows, tileRows, use_nvfp4))
+ 
+   def calculateScaleAddr(write_addr: UInt): UInt = {
+     (write_addr & (~("h_f".U)).asUInt).asUInt  // derive the scale-mem read addr from the accumulator write addr
+@@ -216,7 +218,7 @@ class AccumulatorMem[T <: Data, U <: Data](
+     scale_req.bits.addr := calculateScaleAddr(io.write.bits.addr)
+     val dim = meshRows * tileRows
+     // resp is broadcast to all banks; it is this bank's iff this bank wrote last cycle (one bank writes/cycle)
+-    when(scale_resp.valid && pipelined_writes(0).valid) {
++    if (!use_nvfp4) when(scale_resp.valid && pipelined_writes(0).valid) {
+       // Narrow dim/4 window only for E4M3-single; E4M3-quad and E5M2 use the full-width path below.
+       when(dataType === 0.U && !io.mx_multi_elem && !io.mx_fp8_altfmt) {
+         for (i <- 0 until dim) {
+@@ -263,6 +265,33 @@ class AccumulatorMem[T <: Data, U <: Data](
+   }
+ 
+ 
++  // ---- NVFP4 (use_nvfp4): exact E4M3 block-scale stage + 2-stage IEEE FP32 accumulate + RAW-hazard stall ----
++  // The whole read-modify-write datapath is NvFp4RmwPipe (ported from hw/nvfp4pe, verified standalone there: see its header for the
++  // cycle-by-cycle timeline). It replaces applyE9M0Scale and the shared AccPipe adder. A write fired in cycle t:
++  //   t+1 scale bytes arrive (ScaleFactorMem raw E4M3), t+3 SRAM read of the old row, t+4 scale stage output meets the SRAM data,
++  //   t+6 the new row (sum, or the scaled block for acc=false) is written; pipelined_writes(acc_latency-1) is that write, so
++  //   acc_latency must be 1 + 3 + 2 = 6. RAW hazards are handled by STALL through io.write.ready (no forwarding is possible).
++  val nvpipe = if (use_nvfp4) Some(Module(new NvFp4RmwPipe(t.length, 4, io.write.bits.addr.getWidth, t.getWidth / (8 * 32)))) else None
++  nvpipe.foreach { p =>
++    require(use_mx_scaling && t.length == 16 && meshRows * tileRows == 16, "NVFP4 accumulator: DIM 16 with MX scaling plumbing")
++    require(t.head.length == 1 && t.head.head.getWidth == 128, "NVFP4 accumulator entry is 4 x FP32 = 128 bits")
++    require(acc_latency == p.L, s"NVFP4 accumulate pipe needs acc_latency = ${p.L}, got $acc_latency")
++    p.io.fire := io.write.fire
++    p.io.addr := io.write.bits.addr
++    p.io.acc := io.write.bits.acc
++    p.io.meta := VecInit(io.write.bits.mask.grouped(32).map(_.reduce(_ || _)).toSeq).asUInt
++    p.io.rd_data := DontCare
++    val sresp = io.scale_rd_resp.get.bits.combined_scales
++    for (e <- 0 until t.length) {
++      // pre-scale payload: 4 lanes x int16 (sign-extended int13) in the low 64 bits of the 128-bit entry
++      p.io.data(e) := io.write.bits.data(e).asUInt(63, 0)
++      for (j <- 0 until 4) {
++        p.io.sa(e)(j) := sresp(e)(7, 0)
++        p.io.sb(e)(j) := sresp(e)(8 * (j + 1) + 7, 8 * (j + 1))
++      }
++    }
++  }
++
+   val rdata_for_adder = Wire(t)
+   rdata_for_adder := DontCare
+   val rdata_for_read_resp = Wire(chunk_t)
+@@ -272,7 +301,10 @@ class AccumulatorMem[T <: Data, U <: Data](
+ 
+   
+   io.adder.op1 := rdata_for_adder
+-  if(use_mx_scaling){
++  if (use_nvfp4) {
++    io.adder.op2 := DontCare
++    io.adder.valid := false.B
++  } else if(use_mx_scaling){
+     io.adder.op2 := scaled_data
+     io.adder.valid := pipelined_writes(0).valid && pipelined_writes(0).bits.acc
+   }
+@@ -406,7 +438,8 @@ class AccumulatorMem[T <: Data, U <: Data](
+     def foldW(a: UInt, par: UInt): UInt = a - Mux(par(0), blkSize, 0.U)
+ 
+     // write
+-    val wr_data = Mux(oldest_pipelined_write.bits.acc, adder_sum, oldest_pipelined_write.bits.data)
++    val wr_data = if (use_nvfp4) nvpipe.get.io.wr_data.asUInt.asTypeOf(t)
++                  else Mux(oldest_pipelined_write.bits.acc, adder_sum, oldest_pipelined_write.bits.data)
+     val wr_par  = oldest_pipelined_write.bits.offset
+     // QUAD: offset field carries the chunk parity directly. SINGLE: offset field carries the col-tile's LOCAL entry
+     // offset (0,2,4,6); the CHUNK is the write address' block-index bit (col-tiles 0-3 -> block N -> chunk0, 4-7 ->
+@@ -427,7 +460,8 @@ class AccumulatorMem[T <: Data, U <: Data](
+     } else {
+       mem.io.waddr := oldest_pipelined_write.bits.addr
+       mem.io.wdata := wr_data
+-      mem.io.mask := VecInit(oldest_pipelined_write.bits.mask.grouped(32).map(_.reduce(_ || _)).toSeq)
++      mem.io.mask := (if (use_nvfp4) VecInit(nvpipe.get.io.wr_meta.asBools)
++                      else VecInit(oldest_pipelined_write.bits.mask.grouped(32).map(_.reduce(_ || _)).toSeq))
+     }
+     mem.io.wen := oldest_pipelined_write.valid
+ 
+@@ -436,8 +470,10 @@ class AccumulatorMem[T <: Data, U <: Data](
+       val rd_par = io.write.bits.offset
+       // SINGLE: chunk (fold parity) comes from the read address' block bit, not the offset field (= local offset).
+       val rd_chunk = (io.write.bits.addr >> log2Ceil(meshRows*tileRows).U)(0)
+-      mem.io.raddr_full := (if (widen) foldW(io.write.bits.addr, Mux(io.mx_multi_elem, rd_par, rd_chunk)) else io.write.bits.addr)
+-      mem.io.ren_full := io.write.fire && io.write.bits.acc
++      mem.io.raddr_full := (if (use_nvfp4) nvpipe.get.io.rd_addr
++                            else if (widen) foldW(io.write.bits.addr, Mux(io.mx_multi_elem, rd_par, rd_chunk)) else io.write.bits.addr)
++      mem.io.ren_full := (if (use_nvfp4) nvpipe.get.io.rd_en else io.write.fire && io.write.bits.acc)
++      nvpipe.foreach(_.io.rd_data := mem.io.rdata_full.asTypeOf(nvpipe.get.io.rd_data))
+       // rdata_full is the SyncMem read output 1 cycle after raddr was set, so extractWide must use the parity of
+       // the write that FIRED the read (delayed by the read latency), not the current cycle's offset. Otherwise the
+       // last write of a col-tile pass (whose next write already switched parity) extracts the wrong quadrant ->
+@@ -671,8 +707,9 @@ class AccumulatorMem[T <: Data, U <: Data](
+       !block_read_req
+   )
+ 
+-  io.write.ready := !block_write_req &&
+-    !pipelined_writes.map(r => r.valid && r.bits.addr === io.write.bits.addr && io.write.bits.acc).reduce(_||_)
++  // NVFP4: the RAW stall lives in NvFp4RmwPipe (window sized to its 3-cycle-late SRAM read); MX: any in-flight write to the address.
++  io.write.ready := !block_write_req && (if (use_nvfp4) nvpipe.get.io.ready else
++    !pipelined_writes.map(r => r.valid && r.bits.addr === io.write.bits.addr && io.write.bits.acc).reduce(_||_))
+ 
+   when (reset.asBool) {
+     pipelined_writes.foreach(_.valid := false.B)
+diff --git a/src/main/scala/gemmini/ConfigsFP.scala b/src/main/scala/gemmini/ConfigsFP.scala
+index ac614917..2db8c393 100644
+--- a/src/main/scala/gemmini/ConfigsFP.scala
++++ b/src/main/scala/gemmini/ConfigsFP.scala
+@@ -474,6 +474,29 @@ object GemminiMxFPConfigs {
+     spatialArrayInputType  = MxFloat.withConfig(2, 2, 2, MxConfig.fp4Only),
+     spatialArrayWeightType = MxFloat.withConfig(2, 2, 2, MxConfig.fp4Only),
+   )
++  // NVFP4-only build (M6.3 option iii). Everything MX-specific stays elaboration-gated; differences from fp4OnlyMxFPConfig:
++  //  - use_nvfp4: NvFp4Mesh (exact int13 column sums) replaces the MX float Mesh; AccumulatorMem runs the exact E4M3
++  //    block-scale stage + 2-stage IEEE FP32 accumulate (NvFp4RmwPipe) instead of applyE9M0Scale + the BF16 adder.
++  //  - accType = 4 x IEEE FP32 per entry (128 bits). acc_capacity doubled so the accumulator keeps the same number of rows.
++  //  - spatialArrayOutputType = 64-bit container of 4 x int16 lanes (int13 sums sign-extended), PRE-scale.
++  //  - meshProd/AccPrecisionList left empty: they are only consumed by the MX Mesh/Tile (unused by NvFp4Mesh); they feed
++  //    neither max_simultaneous_matmuls nor the mesh tags (Q6).
++  //  - scaleSize = 16 (one block per mesh pass); acc_latency = 1 + 3 (scale stage) + 2 (FP32 add) = 6.
++  //  - has_acc_mvin = false: all accumulator writes are mesh writes (pre-scale int lanes); no bias/mvin into the accumulator.
++  //  - tile_latency = 0, mesh_output_delay = 1 inherited from standaloneMxFPConfig.
++  lazy val nvfp4MxFPConfig = fp4OnlyMxFPConfig.copy(
++    accType = MxFloat(8, 24, 4, pad = false),
++    accTypeProjected = MxFloat(8, 24, 4, pad = false),
++    spatialArrayOutputType = MxFloat(8, 8, 4, false, false),
++    meshProdPrecisionList = Seq(),
++    meshAccPrecisionList = Seq(),
++    scaleSize = 16,
++    acc_latency = 6,
++    acc_capacity = CapacityInKilobytes(128),
++    has_acc_mvin = false,
++    use_nvfp4 = true,
++    headerFileName = "gemmini_params_nvfp4.h",   // keep the MX gemmini_params.h (used by the M5 tests) untouched
++  )
+   lazy val e3m2OnlyMxFPConfig = standaloneMxFPConfig.copy(
+     inputType  = MxFloat.withConfig(3, 3, 2, MxConfig.e3m2Only),
+     weightType = MxFloat.withConfig(3, 3, 2, MxConfig.e3m2Only),
+@@ -831,6 +854,13 @@ class GemminiMxFPFp4OnlyStandaloneConfig extends Config((site, here, up) => {
+     LazyModule(new Gemmini(GemminiMxFPConfigs.fp4OnlyMxFPConfig))
+   })
+ })
++// NVFP4-only build: integer NvFp4Mesh + E4M3 block-scale stage + FP32 accumulator (M6.3 option iii).
++class GemminiNvFp4StandaloneConfig extends Config((site, here, up) => {
++  case BuildRoCC => Seq((p: Parameters) => {
++    implicit val q = p; implicit val v = implicitly[ValName]
++    LazyModule(new Gemmini(GemminiMxFPConfigs.nvfp4MxFPConfig))
++  })
++})
+ class GemminiMxFPE3M2OnlyStandaloneConfig extends Config((site, here, up) => {
+   case BuildRoCC => Seq((p: Parameters) => {
+     implicit val q = p; implicit val v = implicitly[ValName]
+diff --git a/src/main/scala/gemmini/Controller.scala b/src/main/scala/gemmini/Controller.scala
+index 6b79853c..d8e47e4a 100644
+--- a/src/main/scala/gemmini/Controller.scala
++++ b/src/main/scala/gemmini/Controller.scala
+@@ -1135,7 +1135,7 @@ class GemminiModule[T <: Data: Arithmetic, U <: Data, V <: Data]
+     new PreloadRs(mvin_rows_bits, mvin_cols_bits, local_addr_t), new PreloadRs(mvout_rows_bits, mvout_cols_bits, local_addr_t),
+     new ComputeRs(mvin_rows_bits, mvin_cols_bits, local_addr_t), new ComputeRs(mvin_rows_bits, mvin_cols_bits, local_addr_t),
+     new MvoutSpadRs1(32, local_addr_t), new MvoutRs2(mvout_rows_bits, mvout_cols_bits, local_addr_t),
+-    vec_bypass = has_vpu || has_spad_requant) }
++    vec_bypass = has_vpu || has_spad_requant, scale_size = scaleSize) }
+   
+   if (use_mx_scaling) {
+     loop_matmul.io.activation_mx_format := ex_controller.io.mx.get.activation_mx_format_out
+diff --git a/src/main/scala/gemmini/ExecuteController.scala b/src/main/scala/gemmini/ExecuteController.scala
+index 822ee19f..c8a0e27e 100644
+--- a/src/main/scala/gemmini/ExecuteController.scala
++++ b/src/main/scala/gemmini/ExecuteController.scala
+@@ -304,8 +304,8 @@ class ExecuteController[T <: Data, U <: Data, V <: Data](xLen: Int, tagWidth: In
+   // Instantiate the actual mesh
+   val mesh = Module(new MeshWithDelays(spatialArrayInputType, spatialArrayWeightType, spatialArrayOutputType, accType, mesh_tag, dataflow, tree_reduction, tile_latency, mesh_output_delay,
+     tileRows, tileColumns, meshRows, meshColumns, shifter_banks, shifter_banks, meshProdPrecision, meshAccPrecision, use_mx_scaling,
+-    e4m3QuadThroughput = e4m3QuadThroughput, has_transposer = has_transposer))
+- 
++    e4m3QuadThroughput = e4m3QuadThroughput, has_transposer = has_transposer, use_nvfp4 = use_nvfp4))
++
+   if (use_mx_scaling) {
+     mesh.io.activation_mx_format := mx_state.get.activation_mx_format
+     mesh.io.weight_mx_format := mx_state.get.weight_mx_format
+@@ -1227,10 +1227,25 @@ class ExecuteController[T <: Data, U <: Data, V <: Data](xLen: Int, tagWidth: In
+       io.acc.write(i).valid := start_array_outputting && w_bank === i.U && write_to_acc && !is_garbage_addr && write_this_row
+       io.acc.write(i).bits.addr := w_row
+ 
++      if (use_nvfp4) {
++        // NVFP4: the mesh delivers exact int13 column sums, 4 lanes x 16 bits (sign-extended) per mesh column. They are written
++        // PRE-scale into the low 64 bits of each 128-bit accumulator entry (upper 64 bits zero); AccumulatorMem's scale stage
++        // turns them into 4 x IEEE FP32 (acc entry = 4 lanes x 32 bits) before the SRAM write. Quad packing is the same as the MX
++        // FP4 `packed_data` below (2 output rows x 32 output columns per write): entry e = 4 consecutive output columns of one row.
++        val flat16 = mesh.io.resp.bits.data.flatMap { v =>
++          val w = v(0).asUInt
++          Seq(w(15, 0), w(31, 16), w(47, 32), w(63, 48))
++        }
++        val row0 = flat16.zipWithIndex.filter { case (_, k) => k % 4 < 2 }.map(_._1) // output row 2r   : cols 0..31
++        val row1 = flat16.zipWithIndex.filter { case (_, k) => k % 4 >= 2 }.map(_._1) // output row 2r+1 : cols 0..31
++        val words = (row0.grouped(4) ++ row1.grouped(4)).map { g => Cat(g(3), g(2), g(1), g(0)) }.toSeq // 16 x 64 bits
++        io.acc.write(i).bits.data := VecInit(words.map(w => Cat(0.U(64.W), w))).asTypeOf(io.acc.write(i).bits.data)
++      } else {
+       val normal_data = VecInit(mesh.io.resp.bits.data.map(v => VecInit(v.map(e => e.withWidthOf(accType)))))
+       io.acc.write(i).bits.data := normal_data
++      }
+ 
+-      if (use_mx_scaling) {
++      if (use_mx_scaling && !use_nvfp4) {
+         val activation_mx_format = mx_state.get.activation_mx_format
+         val fmt0_data = (VecInit(mesh.io.resp.bits.data.map(v => VecInit(v.map(e => e.withWidthOf(accType).asUInt(15, 0))))).asUInt << (offset * 64.U)).asTypeOf(io.acc.write(i).bits.data)
+         val packed_data = {
+diff --git a/src/main/scala/gemmini/Fp32AccAdd2.scala b/src/main/scala/gemmini/Fp32AccAdd2.scala
+new file mode 100644
+index 00000000..0a9a437a
+--- /dev/null
++++ b/src/main/scala/gemmini/Fp32AccAdd2.scala
+@@ -0,0 +1,58 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++import hardfloat.{AddRawFN, RawFloat, RoundRawFNToRecFN, fNFromRecFN, rawFloatFromRecFN, recFNFromFN}
++
++/** Stage 1 of the pipelined FP32 adder (combinational): IEEE FP32 in -> recode -> raw operands -> AddRawFN (align, add,
++  * close/far select). Output is the unrounded raw sum (RawFloat(8, 26)) plus the invalid flag. RNE only. */
++class Fp32AddS1 extends Module {
++  val io = IO(new Bundle {
++    val acc = Input(UInt(32.W))
++    val blk = Input(UInt(32.W))
++    val raw = Output(new RawFloat(8, 26))
++    val invalid = Output(Bool())
++  })
++  val add = Module(new AddRawFN(8, 24))
++  add.io.subOp := false.B
++  add.io.a := rawFloatFromRecFN(8, 24, recFNFromFN(8, 24, io.acc))
++  add.io.b := rawFloatFromRecFN(8, 24, recFNFromFN(8, 24, io.blk))
++  add.io.roundingMode := 0.U // round_near_even
++  io.raw := add.io.rawOut
++  io.invalid := add.io.invalidExc
++}
++
++/** Stage 2 (combinational): round the raw sum to FP32 (RNE) and convert back to IEEE bits. NaN out is canonical 0x7FC00000. */
++class Fp32AddS2 extends Module {
++  val io = IO(new Bundle {
++    val raw = Input(new RawFloat(8, 26))
++    val invalid = Input(Bool())
++    val sum = Output(UInt(32.W))
++  })
++  val rnd = Module(new RoundRawFNToRecFN(8, 24, 0))
++  rnd.io.invalidExc := io.invalid
++  rnd.io.infiniteExc := false.B
++  rnd.io.in := io.raw
++  rnd.io.roundingMode := 0.U
++  rnd.io.detectTininess := true.B
++  io.sum := fNFromRecFN(8, 24, rnd.io.out)
++}
++
++/** FP32 accumulate adder pipelined into 2 stages (M6.3 Phase B decision). Bit-identical to the 1-cycle `Fp32AccAdd`.
++  * Latency 2: operands presented in cycle c give `sum` in cycle c+2. Free running (no valid/stall).
++  *   stage 1 (cycle c)  : recode + AddRawFN  -> register R1 (raw sum, 26-bit significand + flags)
++  *   stage 2 (cycle c+1): RoundRawFNToRecFN + un-recode -> register R2 = `sum` */
++class Fp32AccAdd2 extends Module {
++  val io = IO(new Bundle {
++    val acc = Input(UInt(32.W))
++    val blk = Input(UInt(32.W))
++    val sum = Output(UInt(32.W))
++  })
++  val s1 = Module(new Fp32AddS1)
++  val s2 = Module(new Fp32AddS2)
++  s1.io.acc := io.acc
++  s1.io.blk := io.blk
++  s2.io.raw := RegNext(s1.io.raw)
++  s2.io.invalid := RegNext(s1.io.invalid)
++  io.sum := RegNext(s2.io.sum)
++}
+diff --git a/src/main/scala/gemmini/GemminiConfigs.scala b/src/main/scala/gemmini/GemminiConfigs.scala
+index 9ac5ea86..ba759e50 100644
+--- a/src/main/scala/gemmini/GemminiConfigs.scala
++++ b/src/main/scala/gemmini/GemminiConfigs.scala
+@@ -129,8 +129,20 @@ case class GemminiArrayConfig[T <: Data : Arithmetic, U <: Data, V <: Data](
+                                                                              // Base of the standalone LUT/requant-in MMIO regmap (mx_mmio_node). Scale
+                                                                              // factors use a separate flat window at scale_mem.baseAddr, not this.
+                                                                              // None => tl_ext_mem_base + 0x100000.
+-                                                                             mx_mmio_base: Option[BigInt] = None
++                                                                             mx_mmio_base: Option[BigInt] = None,
++                                                                             // NVFP4-only build (M6.3 option iii): integer NvFp4Mesh, E4M3 block-scale stage + pipelined
++                                                                             // IEEE FP32 accumulate inside AccumulatorMem, raw-E4M3 ScaleFactorMem. Requires use_mx_scaling,
++                                                                             // DIM 16, scaleSize 16 and accType = MxFloat(8, 24, 4, pad=false) (4 FP32 lanes per entry).
++                                                                             use_nvfp4: Boolean = false
+                                                        ) {
++  if (use_nvfp4) {
++    require(use_mx_scaling, "use_nvfp4 builds on the MX scaling path")
++    require(meshRows * tileRows == 16 && tileRows == 1 && tileColumns == 1, "NVFP4 mesh is 16x16 with 1x1 tiles")
++    require(scaleSize == 16, "NVFP4 blocks are 16 elements: scaleSize must be 16")
++    require(accType.getWidth == 128, "NVFP4 accType must be 4 x FP32 (128 bits)")
++    require(acc_latency == 6, "NVFP4 accumulate pipe is 6 deep: 1 (pw0) + 3 (scale stage) + 2 (adder)")
++    require(!acc_singleported, "NVFP4 accumulator is two-ported")
++  }
+   // Deprojected operand-row width: sized to the wider of the two operands so an asymmetric build whose
+   // activation (inputType) is wider than its weight still fits (symmetric/weight-wide builds unchanged).
+   val sp_width = meshColumns * tileColumns * (weightType.getWidth max inputType.getWidth)
+diff --git a/src/main/scala/gemmini/LoopMatmul.scala b/src/main/scala/gemmini/LoopMatmul.scala
+index 254daf7d..6cf1da79 100644
+--- a/src/main/scala/gemmini/LoopMatmul.scala
++++ b/src/main/scala/gemmini/LoopMatmul.scala
+@@ -1100,10 +1100,11 @@ class LoopMatmul(block_size: Int, coreMaxAddrBits: Int, reservation_station_size
+                  max_addr: Int, max_acc_addr: Int, input_w: Int, acc_w: Int, dma_max_bytes: Int,
+                  mvin_rs2_t: MvinRs2, preload_rs1_t: PreloadRs, preload_rs2_t: PreloadRs,
+                  compute_rs1_t: ComputeRs, compute_rs2_t: ComputeRs, mvout_spad_rs1_t: MvoutSpadRs1, mvout_rs2_t: MvoutRs2,
+-                 vec_bypass: Boolean = false)
++                 vec_bypass: Boolean = false, scale_size: Int = 32)
+                 (implicit p: Parameters) extends Module {
+   val iterator_bitwidth = 16
+-  val tilesPerMxBlock = 32 / block_size
++  // k-tiles per scale block: scale_size / DIM (MX: 32/16 = 2; NVFP4: scaleSize 16 -> 1)
++  val tilesPerMxBlock = scale_size / block_size
+   val max_block_len = (dma_max_bytes / (block_size * input_w / 8)) max 1
+   val max_block_len_acc = (dma_max_bytes / (block_size * acc_w / 8)) max 1
+   val max_block_size = 2 * block_size  // 32, for sizing pad fields
+@@ -1758,11 +1759,11 @@ object LoopMatmul {
+             max_addr: Int, max_acc_addr: Int, input_w: Int, acc_w: Int, dma_max_bytes: Int,
+             mvin_rs2_t: MvinRs2, preload_rs1_t: PreloadRs, preload_rs2_t: PreloadRs,
+             compute_rs1_t: ComputeRs, compute_rs2_t: ComputeRs, mvout_spad_rs1_t: MvoutSpadRs1, mvout_rs2_t: MvoutRs2,
+-            vec_bypass: Boolean = false)
++            vec_bypass: Boolean = false, scale_size: Int = 32)
+            (implicit p: Parameters): (DecoupledIO[GemminiCmd], Bool, Vec[Bool], LoopMatmul) = {
+     val mod = Module(new LoopMatmul(block_size, coreMaxAddrBits, rob_size, max_lds, max_exs, max_sts,
+       max_addr, max_acc_addr, input_w, acc_w, dma_max_bytes,
+-      mvin_rs2_t, preload_rs1_t, preload_rs2_t, compute_rs1_t, compute_rs2_t, mvout_spad_rs1_t, mvout_rs2_t, vec_bypass))
++      mvin_rs2_t, preload_rs1_t, preload_rs2_t, compute_rs1_t, compute_rs2_t, mvout_spad_rs1_t, mvout_rs2_t, vec_bypass, scale_size))
+     mod.io.in <> in
+     mod.io.ld_completed := ld_completed
+     mod.io.st_completed := st_completed
+diff --git a/src/main/scala/gemmini/Mesh.scala b/src/main/scala/gemmini/Mesh.scala
+index 102d1860..ba5014ce 100644
+--- a/src/main/scala/gemmini/Mesh.scala
++++ b/src/main/scala/gemmini/Mesh.scala
+@@ -15,6 +15,38 @@ import mxgen.{MxTypeBundle, requiredPEMode}
+   * @param meshRows
+   * @param meshColumns
+   */
++// The Mesh port list, shared by Mesh and the NVFP4 mesh adapter so MeshWithDelays can pick either one.
++class MeshIO[T <: Data : Arithmetic](inputType: T, weightType: T, outputType: T, accType: T,
++                                     df: Dataflow.Value, max_simultaneous_matmuls: Int,
++                                     tileRows: Int, tileColumns: Int, meshRows: Int, meshColumns: Int) extends Bundle {
++  val weight_mx_format = Input(UInt(2.W))
++  val activation_mx_format = Input(UInt(2.W))
++  val mx_fp8_altfmt = Input(Bool())   // activation sub-format alt (E5M2/E2M3 vs E4M3/E3M2)
++  val weight_mx_altfmt = Input(Bool())   // weight sub-format alt (per-operand)
++  val act_lut_en = Input(Bool())      // per-operand runtime LUT-usage: activation
++  val weight_lut_en = Input(Bool())   // per-operand runtime LUT-usage: weight
++  val in_a = Input(Vec(meshRows, Vec(tileRows, inputType)))
++  val in_b = Input(Vec(meshColumns, Vec(tileColumns, outputType)))
++  val in_d = Input(Vec(meshColumns, Vec(tileColumns, weightType))) // TODO should this be weightType, inputType, or something like max(inputType, weightType)?
++  val in_control = Input(Vec(meshColumns, Vec(tileColumns, new PEControl(accType))))
++  val in_id = Input(Vec(meshColumns, Vec(tileColumns, UInt(log2Up(max_simultaneous_matmuls).W)))) // The unique id of this particular matmul
++  val in_last = Input(Vec(meshColumns, Vec(tileColumns, Bool())))
++  val out_b = Output(Vec(meshColumns, Vec(tileColumns, outputType)))
++  val out_c = Output(Vec(meshColumns, Vec(tileColumns, if (df == Dataflow.BOTH || df == Dataflow.OS) outputType else weightType)))
++  val in_valid = Input(Vec(meshColumns, Vec(tileColumns, Bool())))
++  val out_valid = Output(Vec(meshColumns, Vec(tileColumns, Bool())))
++  val out_control = Output(Vec(meshColumns, Vec(tileColumns, new PEControl(accType))))
++  val out_id = Output(Vec(meshColumns, Vec(tileColumns, UInt(log2Up(max_simultaneous_matmuls).W))))
++  val out_last = Output(Vec(meshColumns, Vec(tileColumns, Bool())))
++}
++
++abstract class MeshModule[T <: Data : Arithmetic](inputType: T, weightType: T, outputType: T, accType: T,
++                                                  df: Dataflow.Value, max_simultaneous_matmuls: Int,
++                                                  tileRows: Int, tileColumns: Int, meshRows: Int, meshColumns: Int) extends Module {
++  val io = IO(new MeshIO(inputType, weightType, outputType, accType, df, max_simultaneous_matmuls,
++    tileRows, tileColumns, meshRows, meshColumns))
++}
++
+ class Mesh[T <: Data : Arithmetic](inputType: T, weightType: T, outputType: T, accType: T,
+                                    df: Dataflow.Value, tree_reduction: Boolean, tile_latency: Int,
+                                    max_simultaneous_matmuls: Int, output_delay: Int,
+@@ -23,29 +55,9 @@ class Mesh[T <: Data : Arithmetic](inputType: T, weightType: T, outputType: T, a
+                                    meshProdPrecisionList : Seq[T],
+                                    meshAccPrecisionList : Seq[T],
+                                    use_mx_scaling: Boolean = true,
+-                                   e4m3QuadThroughput: Boolean = false) extends Module {
+-
+-  val io = IO(new Bundle {
+-    val weight_mx_format = Input(UInt(2.W))
+-    val activation_mx_format = Input(UInt(2.W))
+-    val mx_fp8_altfmt = Input(Bool())   // activation sub-format alt (E5M2/E2M3 vs E4M3/E3M2)
+-    val weight_mx_altfmt = Input(Bool())   // weight sub-format alt (per-operand)
+-    val act_lut_en = Input(Bool())      // per-operand runtime LUT-usage: activation
+-    val weight_lut_en = Input(Bool())   // per-operand runtime LUT-usage: weight
+-    val in_a = Input(Vec(meshRows, Vec(tileRows, inputType)))
+-    val in_b = Input(Vec(meshColumns, Vec(tileColumns, outputType)))
+-    val in_d = Input(Vec(meshColumns, Vec(tileColumns, weightType))) // TODO should this be weightType, inputType, or something like max(inputType, weightType)?
+-    val in_control = Input(Vec(meshColumns, Vec(tileColumns, new PEControl(accType))))
+-    val in_id = Input(Vec(meshColumns, Vec(tileColumns, UInt(log2Up(max_simultaneous_matmuls).W)))) // The unique id of this particular matmul
+-    val in_last = Input(Vec(meshColumns, Vec(tileColumns, Bool())))
+-    val out_b = Output(Vec(meshColumns, Vec(tileColumns, outputType)))
+-    val out_c = Output(Vec(meshColumns, Vec(tileColumns, if (df == Dataflow.BOTH || df == Dataflow.OS) outputType else weightType)))
+-    val in_valid = Input(Vec(meshColumns, Vec(tileColumns, Bool())))
+-    val out_valid = Output(Vec(meshColumns, Vec(tileColumns, Bool())))
+-    val out_control = Output(Vec(meshColumns, Vec(tileColumns, new PEControl(accType))))
+-    val out_id = Output(Vec(meshColumns, Vec(tileColumns, UInt(log2Up(max_simultaneous_matmuls).W))))
+-    val out_last = Output(Vec(meshColumns, Vec(tileColumns, Bool())))
+-  })
++                                   e4m3QuadThroughput: Boolean = false)
++  extends MeshModule(inputType, weightType, outputType, accType, df, max_simultaneous_matmuls,
++    tileRows, tileColumns, meshRows, meshColumns) {
+ 
+   private val ev = implicitly[Arithmetic[T]]
+   import ev._
+diff --git a/src/main/scala/gemmini/MeshWithDelays.scala b/src/main/scala/gemmini/MeshWithDelays.scala
+index 8297118c..b2c20dbf 100644
+--- a/src/main/scala/gemmini/MeshWithDelays.scala
++++ b/src/main/scala/gemmini/MeshWithDelays.scala
+@@ -35,7 +35,7 @@ class MeshWithDelays[T <: Data: Arithmetic, U <: TagQueueTag with Data]
+    tileRows: Int, tileColumns: Int, meshRows: Int, meshColumns: Int,
+    leftBanks: Int, upBanks: Int, meshProdPrecisionList : Seq[T],
+    meshAccPrecisionList : Seq[T], use_mx_scaling: Boolean = true, outBanks: Int = 1, n_simultaneous_matmuls: Int = -1,
+-   e4m3QuadThroughput: Boolean = false, has_transposer: Boolean = true)
++   e4m3QuadThroughput: Boolean = false, has_transposer: Boolean = true, use_nvfp4: Boolean = false)
+   extends Module {
+ 
+   val A_TYPE = Vec(meshRows, Vec(tileRows, inputType))
+@@ -184,7 +184,13 @@ class MeshWithDelays[T <: Data: Arithmetic, U <: TagQueueTag with Data]
+   }
+ 
+   // Wire up mesh's IO to this module's IO
+-  val mesh = Module(new Mesh(inputType, weightType, outputType, accType, df, tree_reduction, tile_latency, max_simultaneous_matmuls, output_delay, tileRows, tileColumns, meshRows, meshColumns, meshProdPrecisionList, meshAccPrecisionList, use_mx_scaling, e4m3QuadThroughput))
++  // NVFP4-only config (use_nvfp4): the integer NvFp4Mesh (via its Mesh-shaped adapter) replaces the MX float Mesh.
++  val mesh: MeshModule[T] = if (use_nvfp4) {
++    Module(new NvFp4MeshAdapter(inputType, weightType, outputType, accType, df, tile_latency, max_simultaneous_matmuls,
++      output_delay, tileRows, tileColumns, meshRows, meshColumns))
++  } else {
++    Module(new Mesh(inputType, weightType, outputType, accType, df, tree_reduction, tile_latency, max_simultaneous_matmuls, output_delay, tileRows, tileColumns, meshRows, meshColumns, meshProdPrecisionList, meshAccPrecisionList, use_mx_scaling, e4m3QuadThroughput))
++  }
+ 
+   // TODO wire only to *_buf here, instead of io.*.bits
+   val a_shifter_in = WireInit(Mux(a_is_from_transposer, transposer_out.asTypeOf(A_TYPE), a_buf))
+diff --git a/src/main/scala/gemmini/NvFp4Mesh.scala b/src/main/scala/gemmini/NvFp4Mesh.scala
+new file mode 100644
+index 00000000..949cb44a
+--- /dev/null
++++ b/src/main/scala/gemmini/NvFp4Mesh.scala
+@@ -0,0 +1,118 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++
++/** Weight-stationary NVFP4 mesh (M6.2 Phase A1): a dim x dim array of V6 `NvFp4PE`s with exact 13-bit
++  * integer partial sums, laid out like Berkeley's MX Gemmini mesh (gemmini Mesh.scala / PE.scala @ 266c593f,
++  * tileRows = tileColumns = 1; see docs/M6.2-integration-plan.md for file:line refs).
++  *
++  * Pairing and flow (identical to MX FP4 mode):
++  *  - Every mesh-row input (activation) and every mesh-column weight is one byte = TWO E2M1 codes.
++  *    Low nibble = element 0, high nibble = element 1 (Controller.scala:999 expand()).
++  *  - PE lane k = act[k/2] x wei[k%2]  ->  [a0w0, a0w1, a1w0, a1w1]  (MxPE.scala:34), which is NvFp4PE's d00,d01,d10,d11.
++  *    So the two activation nibbles are two different output ROWS (M) and the two weight nibbles two output COLUMNS (N).
++  *  - Activations flow west -> east along a mesh row, partial sums flow north -> south down a mesh column,
++  *    weights are preloaded north -> south through the double-buffered c1/c2 registers (PE.scala:139-151).
++  *  - Between PEs there are `L = tileLatency + 1` registers on the a, b(partial sum), d(weight), propagate and valid
++  *    paths, exactly like Mesh.scala (ShiftRegister for a and valid, valid-gated Pipe for b, d and propagate).
++  *  - The partial sum is Vec(4, SInt(13)) per column instead of MX's per-row FP ramp. Each lane is exact:
++  *    |sum| <= 16 * 144 = 2304 < 2^12 (D2).
++  *
++  * Skew/de-skew is NOT in this module (MX does it in MeshWithDelays, which we do not reimplement here): in_a(r) must
++  * be delayed r*L cycles, and in_b/in_d/in_prop/in_valid(c) delayed c*L cycles, relative to the first row of a pass.
++  * The ChiselSim test drives exactly that schedule. Outputs appear at the bottom row (out_b(c)) with
++  * `mesh_output_delay = 0`, `L*dim` cycles after the same-skewed top-row entry of the corresponding step.
++  */
++class NvFp4MeshPE extends Module {
++  val io = IO(new Bundle {
++    val in_a      = Input(UInt(8.W))             // {a1, a0}
++    val in_b      = Input(Vec(4, SInt(NvFp4.ColW.W))) // partial sums from the PE above
++    val in_d      = Input(UInt(8.W))             // {w1, w0} being preloaded
++    val in_prop   = Input(Bool())                // PE.scala: propagate
++    val in_valid  = Input(Bool())
++    val out_a     = Output(UInt(8.W))
++    val out_b     = Output(Vec(4, SInt(NvFp4.ColW.W)))
++    val out_c     = Output(UInt(8.W))            // preload chain (the buffer being loaded)
++    val out_prop  = Output(Bool())
++    val out_valid = Output(Bool())
++  })
++
++  // PROPAGATE (=1): c1 is being loaded, c2 is the active weight. COMPUTE (=0): c2 is being loaded, c1 is active.
++  val c1 = Reg(UInt(8.W))
++  val c2 = Reg(UInt(8.W))
++  val prop = io.in_prop
++
++  val pe = Module(new NvFp4PE)
++  val w = Mux(prop, c2, c1)
++  pe.a0 := io.in_a(3, 0); pe.a1 := io.in_a(7, 4)
++  pe.w0 := w(3, 0);       pe.w1 := w(7, 4)
++  pe.c00 := io.in_b(0);   pe.c01 := io.in_b(1)
++  pe.c10 := io.in_b(2);   pe.c11 := io.in_b(3)
++  io.out_b(0) := pe.d00;  io.out_b(1) := pe.d01
++  io.out_b(2) := pe.d10;  io.out_b(3) := pe.d11
++
++  io.out_a := io.in_a
++  io.out_prop := prop
++  io.out_valid := io.in_valid
++  io.out_c := Mux(prop, c1, c2)
++
++  when(io.in_valid) {
++    when(prop) { c1 := io.in_d }.otherwise { c2 := io.in_d }
++  }
++}
++
++class NvFp4Mesh(val dim: Int = 16, val tileLatency: Int = 0) extends Module {
++  require(dim >= 1 && tileLatency >= 0)
++  override def desiredName = s"NvFp4Mesh_d${dim}_l$tileLatency"
++
++  val L = tileLatency + 1
++  private def lanes = Vec(4, SInt(NvFp4.ColW.W))
++
++  val io = IO(new Bundle {
++    val in_a      = Input(Vec(dim, UInt(8.W)))   // one pair per mesh row
++    val in_b      = Input(Vec(dim, lanes))       // top partial sums (normally 0)
++    val in_d      = Input(Vec(dim, UInt(8.W)))   // one weight pair per mesh column
++    val in_prop   = Input(Vec(dim, Bool()))
++    val in_valid  = Input(Vec(dim, Bool()))
++    val out_b     = Output(Vec(dim, lanes))      // bottom row: exact block sums, 4 lanes per column
++    val out_valid = Output(Vec(dim, Bool()))
++  })
++
++  private def pipe[T <: Data](valid: Bool, t: T): T =
++    chisel3.withReset(false.B) { Pipe(valid, t, L).bits }
++
++  val mesh = Seq.fill(dim, dim)(Module(new NvFp4MeshPE))
++
++  // a: west -> east, free-running registers (Mesh.scala:110 non-MX path)
++  for (r <- 0 until dim) {
++    mesh(r).foldLeft(io.in_a(r)) { case (in_a, pe) =>
++      pe.io.in_a := ShiftRegister(in_a, L)
++      pe.io.out_a
++    }
++  }
++  // b (partial sums), d (weights), propagate: north -> south, valid-gated pipes (Mesh.scala:117-160)
++  for (c <- 0 until dim) {
++    val col = mesh.map(_(c))
++    col.foldLeft((io.in_b(c), io.in_valid(c))) { case ((b, v), pe) =>
++      pe.io.in_b := pipe(v, b)
++      (pe.io.out_b, pe.io.out_valid)
++    }
++    col.foldLeft((io.in_d(c), io.in_valid(c))) { case ((d, v), pe) =>
++      pe.io.in_d := pipe(v, d)
++      (pe.io.out_c, pe.io.out_valid)
++    }
++    col.foldLeft((io.in_prop(c), io.in_valid(c))) { case ((p, v), pe) =>
++      pe.io.in_prop := pipe(v, p)
++      (pe.io.out_prop, pe.io.out_valid)
++    }
++    col.foldLeft(io.in_valid(c)) { case (v, pe) =>
++      pe.io.in_valid := ShiftRegister(v, L)
++      pe.io.out_valid
++    }
++    io.out_b(c) := col.last.io.out_b
++    io.out_valid(c) := col.last.io.out_valid
++  }
++}
++
++/** Emit SystemVerilog:  sbt "runMain nvfp4pe.ElaborateMesh <outdir> [dim] [tileLatency]" */
+diff --git a/src/main/scala/gemmini/NvFp4MeshAdapter.scala b/src/main/scala/gemmini/NvFp4MeshAdapter.scala
+new file mode 100644
+index 00000000..4b1b8b5b
+--- /dev/null
++++ b/src/main/scala/gemmini/NvFp4MeshAdapter.scala
+@@ -0,0 +1,50 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++
++/** NVFP4 mesh with the same port list as `Mesh` (M6.3 Phase B, option (iii): NVFP4-only config).
++  *
++  * Wraps the verified `NvFp4Mesh` (exact 13-bit integer column sums, V6 PEs; ported unchanged from hw/nvfp4pe) and adds
++  * the sidebands the standalone mesh does not carry:
++  *  - `in_id` / `in_last` are delayed by `meshRows * (tile_latency + 1)` like the per-tile ShiftRegister chain in Mesh.scala
++  *    (the same latency NvFp4Mesh gives `valid`), then by `output_delay`, like Mesh.scala's bottom-row output registers.
++  *  - `out_b` / `out_valid` get the same `output_delay` registers as Mesh.scala.
++  *  - Not modelled (WS only, 1x1 tiles): `in_control.shift/dataflow` (ignored), `out_c`, `out_control` (tied off).
++  *
++  * Data format: the mesh output word of a column is `outputType` (a 64-bit container here): 4 lanes, each the exact int13 column sum
++  * sign-extended to 16 bits, lane k = act(k/2) x wei(k%2), lane 0 in bits 15:0. In `in_b` the same container is accepted.
++  */
++class NvFp4MeshAdapter[T <: Data : Arithmetic](inputType: T, weightType: T, outputType: T, accType: T,
++                                               df: Dataflow.Value, tile_latency: Int,
++                                               max_simultaneous_matmuls: Int, output_delay: Int,
++                                               tileRows: Int, tileColumns: Int,
++                                               meshRows: Int, meshColumns: Int)
++  extends MeshModule(inputType, weightType, outputType, accType, df, max_simultaneous_matmuls,
++    tileRows, tileColumns, meshRows, meshColumns) {
++
++  require(tileRows == 1 && tileColumns == 1 && meshRows == meshColumns, "NVFP4 mesh: 1x1 tiles, square mesh")
++  require(outputType.getWidth == 64, s"NVFP4 mesh output container must be 4 x 16 bits, got ${outputType.getWidth}")
++  require(inputType.getWidth == 8 && weightType.getWidth == 8, "NVFP4 mesh operands are two E2M1 codes per byte")
++  val dim = meshRows
++  val L = tile_latency + 1
++
++  val m = Module(new NvFp4Mesh(dim, tile_latency))
++
++  for (r <- 0 until dim) m.io.in_a(r) := io.in_a(r)(0).asUInt
++  for (c <- 0 until dim) {
++    val bw = io.in_b(c)(0).asUInt
++    for (k <- 0 until 4) m.io.in_b(c)(k) := bw(16 * k + NvFp4.ColW - 1, 16 * k).asSInt
++    m.io.in_d(c) := io.in_d(c)(0).asUInt
++    m.io.in_prop(c) := io.in_control(c)(0).propagate.asBool
++    m.io.in_valid(c) := io.in_valid(c)(0)
++
++    val ob = Cat((0 until 4).reverse.map(k => m.io.out_b(c)(k).pad(16).asUInt))
++    io.out_b(c)(0) := ShiftRegister(ob, output_delay).asTypeOf(outputType)
++    io.out_valid(c)(0) := ShiftRegister(m.io.out_valid(c), output_delay)
++    io.out_id(c)(0) := ShiftRegister(io.in_id(c)(0), dim * L + output_delay)
++    io.out_last(c)(0) := ShiftRegister(io.in_last(c)(0), dim * L + output_delay)
++    io.out_c(c)(0) := 0.U.asTypeOf(io.out_c(c)(0))
++    io.out_control(c)(0) := 0.U.asTypeOf(io.out_control(c)(0))
++  }
++}
+diff --git a/src/main/scala/gemmini/NvFp4PE.scala b/src/main/scala/gemmini/NvFp4PE.scala
+new file mode 100644
+index 00000000..fed48106
+--- /dev/null
++++ b/src/main/scala/gemmini/NvFp4PE.scala
+@@ -0,0 +1,93 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++
++/** Decoded E2M1 magnitude (low 3 bits of the code), per the D1 table.
++  * Doubled value = (m3 ? 3 : 1) << k, or 0 when `z`.
++  */
++class Fp4Dec extends Bundle {
++  val m3 = Bool()
++  val k  = UInt(2.W)
++  val z  = Bool()
++}
++
++object NvFp4 {
++  val ColW = 13 // signed column partial-sum width: |sum| <= 16*144 = 2304 < 2^12
++
++  /** code[2:0] = (e[1:0], m). e=0: m'=1,k=0 (zero if m=0); e>=1,m=0: m'=1,k=e; e>=1,m=1: m'=3,k=e-1. */
++  def decode(x: UInt): Fp4Dec = {
++    val e = x(2, 1)
++    val m = x(0)
++    val d = Wire(new Fp4Dec)
++    d.z  := x(2, 0) === 0.U
++    d.m3 := e.orR && m
++    d.k  := Mux(e === 0.U, 0.U, Mux(m, e - 1.U, e))
++    d
++  }
++
++  /** |product| of two decoded operands: mux{1,3,9} << (ka+kb). Max 9<<4 = 144, so 8 bits. */
++  def magProd(a: Fp4Dec, w: Fp4Dec): UInt = {
++    val base = MuxLookup(Cat(a.m3, w.m3), 9.U(4.W))(Seq(0.U -> 1.U(4.W), 1.U -> 3.U(4.W), 2.U -> 3.U(4.W)))
++    val sh   = (base << (a.k +& w.k))(7, 0)
++    Mux(a.z || w.z, 0.U(8.W), sh)
++  }
++
++  /** c + (s ? ~mag : mag) + s as ONE adder with carry-in s: ({c,1} + {x,s}) >> 1.
++    * -0 needs no special case: mag=0, s=1 gives c + (-1) + 1 = c.
++    */
++  def addFold(c: UInt, mag: UInt, s: Bool): UInt = {
++    val m13 = Cat(0.U((ColW - 8).W), mag)
++    val x   = Mux(s, ~m13, m13)
++    val sum = Cat(c, 1.U(1.W)) + Cat(x, s)
++    sum(ColW, 1)
++  }
++}
++
++/** One lane: 4-bit E2M1 x 4-bit E2M1 -> 9-bit signed product of the DOUBLED values (-144..144).
++  * Purely combinational (RawModule: no clock/reset ports); flat port names a, w, p.
++  */
++class NvFp4Mul extends RawModule {
++  val a = IO(Input(UInt(4.W)))
++  val w = IO(Input(UInt(4.W)))
++  val p = IO(Output(SInt(9.W)))
++
++  val mag = NvFp4.magProd(NvFp4.decode(a(2, 0)), NvFp4.decode(w(2, 0)))
++  val s   = a(3) ^ w(3)
++  val m9  = Cat(0.U(1.W), mag)
++  val x   = Mux(s, ~m9, m9)
++  p := (x + s)(8, 0).asSInt
++}
++
++/** 2x2 outer-product PE: d_ij = c_ij + P(a_i, w_j). Each operand is decoded once and shared (variant V6).
++  * Combinational; flat port names match the hand-written Verilog (a0,a1,w0,w1,c00..c11,d00..d11).
++  */
++class NvFp4PE extends RawModule {
++  val a0  = IO(Input(UInt(4.W)))
++  val a1  = IO(Input(UInt(4.W)))
++  val w0  = IO(Input(UInt(4.W)))
++  val w1  = IO(Input(UInt(4.W)))
++  val c00 = IO(Input(SInt(NvFp4.ColW.W)))
++  val c01 = IO(Input(SInt(NvFp4.ColW.W)))
++  val c10 = IO(Input(SInt(NvFp4.ColW.W)))
++  val c11 = IO(Input(SInt(NvFp4.ColW.W)))
++  val d00 = IO(Output(SInt(NvFp4.ColW.W)))
++  val d01 = IO(Output(SInt(NvFp4.ColW.W)))
++  val d10 = IO(Output(SInt(NvFp4.ColW.W)))
++  val d11 = IO(Output(SInt(NvFp4.ColW.W)))
++
++  val da0 = NvFp4.decode(a0(2, 0))
++  val da1 = NvFp4.decode(a1(2, 0))
++  val dw0 = NvFp4.decode(w0(2, 0))
++  val dw1 = NvFp4.decode(w1(2, 0))
++
++  private def lane(c: SInt, da: Fp4Dec, dw: Fp4Dec, sa: Bool, sw: Bool): SInt =
++    NvFp4.addFold(c.asUInt, NvFp4.magProd(da, dw), sa ^ sw).asSInt
++
++  d00 := lane(c00, da0, dw0, a0(3), w0(3))
++  d01 := lane(c01, da0, dw1, a0(3), w1(3))
++  d10 := lane(c10, da1, dw0, a1(3), w0(3))
++  d11 := lane(c11, da1, dw1, a1(3), w1(3))
++}
++
++/** Emit SystemVerilog:  sbt "runMain nvfp4pe.Elaborate <outdir>" */
+diff --git a/src/main/scala/gemmini/NvFp4RmwPipe.scala b/src/main/scala/gemmini/NvFp4RmwPipe.scala
+new file mode 100644
+index 00000000..f63d811f
+--- /dev/null
++++ b/src/main/scala/gemmini/NvFp4RmwPipe.scala
+@@ -0,0 +1,125 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++
++/** Read-modify-write datapath + hazard control for the NVFP4 accumulator (M6.3 Phase B). This is the exact logic that is
++  * ported into Gemmini's AccumulatorMem (NVFP4 branch). The accumulator SRAM itself is outside this module.
++  *
++  * Timeline of one write that fires (`fire`) in cycle t (ScaleLat = 3, AddLat = 2):
++  *   t      : fire; req fields + int13 lanes are registered into pw(0). The scale-factor memory is read in cycle t.
++  *   t+1    : pw(0) valid; scale bytes (sa per entry, sb per lane) arrive; scale-stage stage 0 starts
++  *   t+3    : pw(ScaleLat-1) valid; SRAM read of the OLD accumulator row is issued (rd_en/rd_addr) if acc
++  *   t+4    : scale-stage output (exact FP32 block value) and SRAM read data meet at the adder inputs
++  *   t+6    : adder output (2 stages); pw(L-1), L = 1+ScaleLat+AddLat = 6, is valid; the row (sum, or the block value for a
++  *            non-acc write) is written to the SRAM (wr_*).
++  *
++  * Read-after-write hazard, resolved by STALL (not forwarding): an accumulate to address A whose SRAM read (cycle
++  * t2+ScaleLat) happens before an earlier write to A is in the SRAM (visible from cycle t1+L+1) would read stale data.
++  * That is t2-t1 < L+1-ScaleLat = AddLat+2 = 4, i.e. the earlier write is in pw(0..L-ScaleLat-1). While that is true,
++  * `ready` is low and the producer must hold the request. (Forwarding cannot work: the earlier sum does not exist until
++  * t1+6 but the later add needs it at t1+d+3 with d >= 1, a loop-carried dependency of latency 6, so back-to-back
++  * same-address accumulates have to serialize.) Non-acc writes never read, and write order = fire order (fixed
++  * latency FIFO), so they need no stall.
++  *
++  * `data` carries int13 lanes sign-extended to 16 bits (lane j in bits 16j+15:16j of each entry).
++  */
++class NvFp4RmwPipe(val entries: Int, val lanes: Int = 4, val addrW: Int = 8, val metaW: Int = 1) extends Module {
++  val ScaleLat = 3
++  val AddLat = 2
++  val L = 1 + ScaleLat + AddLat
++  val io = IO(new Bundle {
++    // request side (cycle t)
++    val fire = Input(Bool())
++    val addr = Input(UInt(addrW.W))
++    val acc = Input(Bool())
++    val meta = Input(UInt(metaW.W))
++    val data = Input(Vec(entries, UInt((lanes * 16).W)))
++    val ready = Output(Bool())
++    // scale bytes, valid in cycle t+1 (same cycle pw(0) is valid); sa per lane (Gemmini broadcasts one sa per entry)
++    val sa = Input(Vec(entries, Vec(lanes, UInt(8.W))))
++    val sb = Input(Vec(entries, Vec(lanes, UInt(8.W))))
++    // SRAM read port (1-cycle read latency) and write port
++    val rd_en = Output(Bool())
++    val rd_addr = Output(UInt(addrW.W))
++    val rd_data = Input(Vec(entries, UInt((lanes * 32).W)))
++    val wr_valid = Output(Bool())
++    val wr_addr = Output(UInt(addrW.W))
++    val wr_meta = Output(UInt(metaW.W))
++    val wr_acc = Output(Bool())
++    val wr_data = Output(Vec(entries, UInt((lanes * 32).W)))
++    // in-flight write addresses (pw(0..L-1)) for other hazard checks (mvout reads)
++    val inflight = Output(Vec(L, Valid(UInt(addrW.W))))
++  })
++
++  class Pw extends Bundle { val addr = UInt(addrW.W); val acc = Bool(); val meta = UInt(metaW.W) }
++  val pwV = RegInit(VecInit(Seq.fill(L)(false.B)))
++  val pw = Reg(Vec(L, new Pw))
++  pwV(0) := io.fire
++  pw(0).addr := io.addr; pw(0).acc := io.acc; pw(0).meta := io.meta
++  for (i <- 1 until L) { pwV(i) := pwV(i - 1); pw(i) := pw(i - 1) }
++  for (i <- 0 until L) { io.inflight(i).valid := pwV(i); io.inflight(i).bits := pw(i).addr }
++
++  // ---- RAW hazard: stall an accumulate that would read before an earlier write to the same address lands ----
++  val hazard = io.acc && (0 until (L - ScaleLat)).map(i => pwV(i) && pw(i).addr === io.addr).reduce(_ || _)
++  io.ready := !hazard
++
++  // ---- SRAM read of the old row, ScaleLat cycles after fire ----
++  io.rd_en := pwV(ScaleLat - 1) && pw(ScaleLat - 1).acc
++  io.rd_addr := pw(ScaleLat - 1).addr
++
++  // ---- datapath ----
++  val d0 = RegNext(io.data)
++  val blkOut = Wire(Vec(entries, Vec(lanes, UInt(32.W))))
++  val sumOut = Wire(Vec(entries, Vec(lanes, UInt(32.W))))
++  for (e <- 0 until entries) {
++    val st = Module(new NvFp4ScaleStage(lanes))
++    st.io.in_valid := pwV(0)
++    for (j <- 0 until lanes) {
++      st.io.isum(j) := d0(e)(16 * j + 12, 16 * j).asSInt
++      st.io.sa(j) := io.sa(e)(j)
++      st.io.sb(j) := io.sb(e)(j)
++      val add = Module(new Fp32AccAdd2)
++      add.io.acc := io.rd_data(e)(32 * j + 31, 32 * j)
++      add.io.blk := st.io.out(j)
++      blkOut(e)(j) := ShiftRegister(st.io.out(j), AddLat)
++      sumOut(e)(j) := add.io.sum
++    }
++  }
++  val oldest = pw(L - 1)
++  io.wr_valid := pwV(L - 1)
++  io.wr_addr := oldest.addr
++  io.wr_meta := oldest.meta
++  io.wr_acc := oldest.acc
++  for (e <- 0 until entries)
++    io.wr_data(e) := Mux(oldest.acc, sumOut(e).asUInt, blkOut(e).asUInt)
++}
++
++/** Standalone test wrapper: NvFp4RmwPipe + a flop-array SRAM (depth rows of entries*lanes*32 bits) with a debug read port. */
++class NvFp4AccBank(val entries: Int, val lanes: Int, val depth: Int) extends Module {
++  val aw = log2Ceil(depth)
++  val pipe = Module(new NvFp4RmwPipe(entries, lanes, aw, 1))
++  val io = IO(new Bundle {
++    val fire = Input(Bool())
++    val addr = Input(UInt(aw.W))
++    val acc = Input(Bool())
++    val data = Input(Vec(entries, UInt((lanes * 16).W)))
++    val ready = Output(Bool())
++    val sa = Input(Vec(entries, Vec(lanes, UInt(8.W))))
++    val sb = Input(Vec(entries, Vec(lanes, UInt(8.W))))
++    val wr_valid = Output(Bool())
++    val wr_addr = Output(UInt(aw.W))
++    val wr_data = Output(Vec(entries, UInt((lanes * 32).W)))
++    val dbg_addr = Input(UInt(aw.W))
++    val dbg_data = Output(Vec(entries, UInt((lanes * 32).W)))
++  })
++  pipe.io.fire := io.fire; pipe.io.addr := io.addr; pipe.io.acc := io.acc; pipe.io.meta := 0.U; pipe.io.data := io.data
++  io.ready := pipe.io.ready
++  pipe.io.sa := io.sa; pipe.io.sb := io.sb
++  val mem = Mem(depth, Vec(entries, UInt((lanes * 32).W)))
++  pipe.io.rd_data := RegNext(mem(pipe.io.rd_addr))
++  when(pipe.io.wr_valid) { mem(pipe.io.wr_addr) := pipe.io.wr_data }
++  io.wr_valid := pipe.io.wr_valid; io.wr_addr := pipe.io.wr_addr; io.wr_data := pipe.io.wr_data
++  io.dbg_data := mem(io.dbg_addr)
++}
++
+diff --git a/src/main/scala/gemmini/NvFp4ScaleStage.scala b/src/main/scala/gemmini/NvFp4ScaleStage.scala
+new file mode 100644
+index 00000000..59251c6a
+--- /dev/null
++++ b/src/main/scala/gemmini/NvFp4ScaleStage.scala
+@@ -0,0 +1,135 @@
++package gemmini
++
++import chisel3._
++import chisel3.util._
++import hardfloat.{AddRecFN, fNFromRecFN, recFNFromFN}
++
++/** NVFP4 block-scale stage (M6.3 Phase A): FP32 bits of  isum * sA * sB  for 4 lanes, exact, 3 register stages.
++  *
++  *  stage 0: decode both E4M3 scales: sP = sigA*sigB (4x4 -> <= 8 bits), eS = eA'+eB' (5 bits), sign, NaN flag
++  *  stage 1: prod = |isum| * sP  (13 x 8 -> 21 bits)
++  *  stage 2: leading-one normalize and pack to FP32, no rounding
++  *
++  * Why nothing rounds: sigA, sigB <= 15 so sP <= 225 (8 bits); |isum| <= 4096 (13-bit magnitude; 2304 in use),
++  * so prod < 2^20 and fits in 21 bits, which is <= 24 (the FP32 significand). The exponent is
++  * eS + 127 - lz in [109, 157]: always a normal FP32, so no overflow and no subnormals either.
++  *
++  * E4M3: e == 0 is subnormal (sig = m, exponent field treated as 1); 0x7F/0xFF are NaN -> the lane outputs the canonical
++  * qNaN 0x7FC00000 (same as refmodel/scale_stage.py). The sign bit of each scale is honoured (sign = sI ^ sA ^ sB,
++  * also for a zero result), although NVFP4 scales are positive.
++  *
++  * Latency: out_valid / out appear 3 cycles after in_valid / lanes (registers after each of the 3 stages).
++  */
++class NvFp4ScaleStage(lanes: Int = 4) extends Module {
++  val io = IO(new Bundle {
++    val in_valid = Input(Bool())
++    val isum = Input(Vec(lanes, SInt(13.W)))
++    val sa = Input(Vec(lanes, UInt(8.W)))
++    val sb = Input(Vec(lanes, UInt(8.W)))
++    val out_valid = Output(Bool())
++    val out = Output(Vec(lanes, UInt(32.W)))
++  })
++
++  private def dec(c: UInt): (UInt, UInt) = { // (significand incl. hidden bit, effective exponent field)
++    val e = c(6, 3); val m = c(2, 0)
++    val sub = e === 0.U
++    (Cat(!sub, m), Mux(sub, 1.U(4.W), e))
++  }
++
++  // ---- stage 0 ----
++  val v0 = RegNext(io.in_valid, false.B)
++  val s0P = Wire(Vec(lanes, UInt(8.W))); val s0E = Wire(Vec(lanes, UInt(5.W)))
++  val s0S = Wire(Vec(lanes, Bool())); val s0N = Wire(Vec(lanes, Bool()))
++  for (i <- 0 until lanes) {
++    val (siga, ea) = dec(io.sa(i)); val (sigb, eb) = dec(io.sb(i))
++    s0P(i) := siga * sigb
++    s0E(i) := ea +& eb
++    s0S(i) := io.sa(i)(7) ^ io.sb(i)(7)
++    s0N(i) := io.sa(i)(6, 0).andR || io.sb(i)(6, 0).andR
++  }
++  val r0P = RegNext(s0P); val r0E = RegNext(s0E); val r0S = RegNext(s0S); val r0N = RegNext(s0N)
++  val r0I = RegNext(io.isum)
++
++  // ---- stage 1 ----
++  val v1 = RegNext(v0, false.B)
++  val s1Prod = Wire(Vec(lanes, UInt(21.W))); val s1S = Wire(Vec(lanes, Bool()))
++  for (i <- 0 until lanes) {
++    val neg = r0I(i) < 0.S
++    val mag = Mux(neg, (-r0I(i)).asUInt, r0I(i).asUInt)(12, 0) // |-4096| = 4096 fits in 13 bits unsigned
++    s1Prod(i) := mag * r0P(i)
++    s1S(i) := r0S(i) ^ neg
++  }
++  val r1Prod = RegNext(s1Prod); val r1E = RegNext(r0E); val r1S = RegNext(s1S); val r1N = RegNext(r0N)
++
++  // ---- stage 2 ----
++  val v2 = RegNext(v1, false.B)
++  val s2 = Wire(Vec(lanes, UInt(32.W)))
++  for (i <- 0 until lanes) {
++    val prod = r1Prod(i)
++    val lz = PriorityEncoder(Reverse(prod))               // 0..20 (don't care when prod == 0)
++    val norm = (prod << lz)(20, 0)                         // leading one at bit 20
++    val frac = Cat(norm(19, 0), 0.U(3.W))                  // 23 bits, exact
++    val expo = (r1E(i) +& 127.U(8.W)) - lz                 // biased exponent, 109..157
++    val zero = prod === 0.U
++    s2(i) := Mux(r1N(i), "h7fc00000".U(32.W),
++      Mux(zero, Cat(r1S(i), 0.U(31.W)), Cat(r1S(i), expo(7, 0), frac)))
++  }
++  io.out := RegNext(s2)
++  io.out_valid := v2
++}
++
++/** FP32 add on recoded (hardfloat) operands: the rounding core only. RNE, no subtraction. */
++class Fp32AccAddRec extends Module {
++  val io = IO(new Bundle {
++    val acc = Input(UInt(33.W))
++    val blk = Input(UInt(33.W))
++    val sum = Output(UInt(33.W))
++  })
++  val add = Module(new AddRecFN(8, 24))
++  add.io.subOp := false.B
++  add.io.a := io.acc
++  add.io.b := io.blk
++  add.io.roundingMode := 0.U // round_near_even
++  add.io.detectTininess := true.B
++  io.sum := add.io.out
++}
++
++/** FP32 add on standard IEEE bit patterns (recode in, add, un-recode out); combinational. NaN out is canonical 0x7FC00000. */
++class Fp32AccAdd extends Module {
++  val io = IO(new Bundle {
++    val acc = Input(UInt(32.W))
++    val blk = Input(UInt(32.W))
++    val sum = Output(UInt(32.W))
++  })
++  val core = Module(new Fp32AccAddRec)
++  core.io.acc := recFNFromFN(8, 24, io.acc)
++  core.io.blk := recFNFromFN(8, 24, io.blk)
++  io.sum := fNFromRecFN(8, 24, core.io.sum)
++}
++
++/** Scale stage + per-lane FP32 accumulator register (one add per K block). `first` starts a new accumulation (acc operand = +0).
++  * Latency: a block poked at cycle t is in `acc` at cycle t+4 (3 scale stages + 1 add). `acc_valid` pulses with it. */
++class NvFp4ScaleAcc(lanes: Int = 4) extends Module {
++  val io = IO(new Bundle {
++    val in_valid = Input(Bool())
++    val first = Input(Bool())
++    val isum = Input(Vec(lanes, SInt(13.W)))
++    val sa = Input(Vec(lanes, UInt(8.W)))
++    val sb = Input(Vec(lanes, UInt(8.W)))
++    val acc_valid = Output(Bool())
++    val acc = Output(Vec(lanes, UInt(32.W)))
++  })
++  val st = Module(new NvFp4ScaleStage(lanes))
++  st.io.in_valid := io.in_valid; st.io.isum := io.isum; st.io.sa := io.sa; st.io.sb := io.sb
++  val f1 = RegNext(io.first); val f2 = RegNext(f1); val f3 = RegNext(f2)
++  val accR = RegInit(VecInit(Seq.fill(lanes)(0.U(32.W))))
++  val adders = Seq.fill(lanes)(Module(new Fp32AccAdd))
++  for (i <- 0 until lanes) {
++    adders(i).io.acc := Mux(f3, 0.U, accR(i))
++    adders(i).io.blk := st.io.out(i)
++    when(st.io.out_valid) { accR(i) := adders(i).io.sum }
++  }
++  io.acc := accR
++  io.acc_valid := RegNext(st.io.out_valid, false.B)
++}
++
+diff --git a/src/main/scala/gemmini/ScaleFactorMem.scala b/src/main/scala/gemmini/ScaleFactorMem.scala
+index e5473001..b3b22a98 100644
+--- a/src/main/scala/gemmini/ScaleFactorMem.scala
++++ b/src/main/scala/gemmini/ScaleFactorMem.scala
+@@ -9,16 +9,17 @@ class ScalingFactorReadReq(addrWidth: Int) extends Bundle {
+   val scaling_enable = Bool() 
+ }
+ 
+-class ScalingFactorReadResp(numRows: Int, numCols: Int) extends Bundle {  
+-  val combined_scales = Vec(numRows/2, UInt(36.W))
++// scaleBits: bits per response element. MX: 4 lanes x 9-bit summed E8M0 scale = 36. NVFP4: raw E4M3 bytes, sA (8) + 4 x sB (32) = 40.
++class ScalingFactorReadResp(numRows: Int, numCols: Int, scaleBits: Int = 36) extends Bundle {
++  val combined_scales = Vec(numRows/2, UInt(scaleBits.W))
+ }
+ 
+-class ScalingFactorMemIO(addrWidth: Int, dataWidth: Int, numRows: Int, numCols: Int, meshRows:Int, tileRows: Int) extends Bundle {
++class ScalingFactorMemIO(addrWidth: Int, dataWidth: Int, numRows: Int, numCols: Int, meshRows:Int, tileRows: Int, scaleBits: Int = 36) extends Bundle {
+   // writes happen to all interleaved banks for a line
+   val scale_mem_write_w = Flipped(Decoupled(new ScalingFactorWriteReq(addrWidth, dataWidth)))
+   val scale_mem_write_act = Flipped(Decoupled(new ScalingFactorWriteReq(addrWidth, dataWidth)))
+   val read_req = Flipped(Decoupled(new ScalingFactorReadReq(7)))
+-  val read_resp = Decoupled(new ScalingFactorReadResp(numRows, numCols))
++  val read_resp = Decoupled(new ScalingFactorReadResp(numRows, numCols, scaleBits))
+   val dataType = Input(UInt(2.W))
+   val mx_multi_elem = Input(Bool())   // WEIGHT (output-column) throughput: 2 cols/lane iff quad weight
+   val mx_multi_elem_act = Input(Bool())   // ACTIVATION (output-row) throughput: 2 rows/lane iff quad act
+@@ -40,6 +41,8 @@ class ScalingFactorMem(
+   testConfig: Boolean = false ,
+   meshRows: Int,
+   tileRows: Int,
++  scaleSize: Int = 32,       // block size in elements (MX: 32, NVFP4: 16); sets how many k-tiles share one scale row
++  nvfp4: Boolean = false,    // respond with raw E4M3 bytes (sA, sB per lane) instead of summed E8M0 exponents
+ ) extends Module {
+   val scaleMemSizeFactor = 4
+   val doubleBufferFactor = 2
+@@ -57,6 +60,7 @@ class ScalingFactorMem(
+     2*meshRows*tileRows,   // 32 columns (weight scales)
+     meshRows,
+     tileRows,
++    if (nvfp4) 40 else 36,
+   ))
+ 
+   val initByte = 0x7e.U(8.W)
+@@ -191,9 +195,10 @@ class ScalingFactorMem(
+   val max_block_fp8 = meshRows * tileRows
+   val max_block_non_fp8 = 2 * meshRows * tileRows
+ 
+-  // MX block = 32 elements. tilesPerMxBlock k-tiles share one block scale -> advance the scale-row
+-  // address once every tilesPerMxBlock k-tiles. DIM16: 32/16=2 -> shift 1; DIM32: 32/32=1 -> shift 0.
+-  val tilesPerMxBlock = 32 / (meshRows*tileRows)
++  // MX block = scaleSize elements (32 for MX, 16 for NVFP4). tilesPerMxBlock k-tiles share one block scale -> advance the
++  // scale-row address once every tilesPerMxBlock k-tiles. MX DIM16: 32/16=2 -> shift 1; DIM32 (MX) and DIM16 (NVFP4,
++  // scaleSize 16): 1 -> shift 0.
++  val tilesPerMxBlock = scaleSize / (meshRows*tileRows)
+   val kScaleShift = log2Ceil(tilesPerMxBlock max 1)
+   val row_addr_width = log2Ceil(2*depth_sram)
+   val read_row_addr_act = Wire(UInt(row_addr_width.W))
+@@ -301,7 +306,7 @@ class ScalingFactorMem(
+   io.read_resp.valid := false.B
+   io.read_req.ready := io.read_req.bits.scaling_enable
+ 
+-  for(i <- 0 until 2*meshRows*tileRows) {
++  if (!nvfp4) for(i <- 0 until 2*meshRows*tileRows) {
+     for(j <- 0 until 2*meshRows*tileRows) {
+       when(read_fire_d1) {
+         combined_scales_buffer(i)(j) := multiplyScalesE8M0(act_scales(i), weight_scales(j))
+@@ -325,7 +330,30 @@ class ScalingFactorMem(
+     combined_scales_buffer_reg := combined_scales_buffer
+   }
+ 
+-  when(read_fire_d1) {
++  if (nvfp4) {
++    // NVFP4: no sA+sB pre-multiply here (Q3): the response carries the raw E4M3 bytes and the scale stage inside AccumulatorMem
++    // multiplies them. One write = 2 output rows x 32 output columns in 16 entries x 4 lanes (ExecuteController packed layout):
++    // entry e<8 -> act row 2c, entry e>=8 -> act row 2c+1 (c = scale_counter 0..15 = write index within the 32x32 pass);
++    // lane j of entry e -> weight column 4*(e%8)+j. The 32 act and 32 weight bytes are latched on the pass's first write.
++    val act_reg = RegInit(VecInit(Seq.fill(2*numScaleRows)(0.U(8.W))))
++    val w_reg = RegInit(VecInit(Seq.fill(2*numScaleRows)(0.U(8.W))))
++    when(read_fire_real_d) {
++      act_reg := act_scales
++      w_reg := weight_scales
++    }
++    val first_write = scale_counter_d1 === 0.U
++    val act_sel = Mux(first_write, act_scales, act_reg)
++    val w_sel = Mux(first_write, weight_scales, w_reg)
++    when(read_fire_d1) {
++      io.read_resp.valid := true.B
++      for (e <- 0 until numScaleRows) {
++        val hi = e >= numScaleRows / 2
++        val sa = act_sel(Cat(scale_counter_d1, hi.B))
++        val sb = (0 until 4).map(j => w_sel(4 * (e % (numScaleRows / 2)) + j))
++        io.read_resp.bits.combined_scales(e) := Cat((sb.reverse :+ sa))
++      }
++    }
++  } else when(read_fire_d1) {
+     io.read_resp.valid := combined_scales_valid
+     when(fp8Mode){
+       when(scale_counter_d1 === 0.U){
+diff --git a/src/main/scala/gemmini/Scratchpad.scala b/src/main/scala/gemmini/Scratchpad.scala
+index 8e1836a9..e694cd20 100644
+--- a/src/main/scala/gemmini/Scratchpad.scala
++++ b/src/main/scala/gemmini/Scratchpad.scala
+@@ -1151,7 +1151,8 @@ class Scratchpad[T <: Data, U <: Data, V <: Data](config: GemminiArrayConfig[T,
+       }
+     }
+ 
+-    val acc_adders = Module(new AccPipeShared(acc_latency-1, acc_row_t, acc_banks))
++    // NVFP4: the accumulate adder (2-stage FP32) lives inside each AccumulatorMem's NvFp4RmwPipe; no shared MX adder.
++    val acc_adders = Option.when(!config.use_nvfp4)(Module(new AccPipeShared(acc_latency-1, acc_row_t, acc_banks)))
+ 
+     val acc_mems = {
+       val banks = Seq.fill(acc_banks) { Module(new AccumulatorMem(
+@@ -1163,6 +1164,7 @@ class Scratchpad[T <: Data, U <: Data, V <: Data](config: GemminiArrayConfig[T,
+         config.scale_mem,
+         meshRows,
+         tileRows,
++        config.use_nvfp4,
+       )) }
+       val bank_ios = VecInit(banks.map(_.io))
+ 
+@@ -1180,7 +1182,9 @@ class Scratchpad[T <: Data, U <: Data, V <: Data](config: GemminiArrayConfig[T,
+           numBanks = conf.numBanks,
+           testConfig = config.testConfig,
+           meshRows = meshRows,
+-          tileRows = tileRows
++          tileRows = tileRows,
++          scaleSize = config.scaleSize,
++          nvfp4 = config.use_nvfp4
+         ))
+         Seq((sm.io.scale_mem_write_w, io.scale_mem_write_w.get), (sm.io.scale_mem_write_act, io.scale_mem_write_act.get)).foreach {
+           case (dst, src) =>
+@@ -1226,10 +1230,15 @@ class Scratchpad[T <: Data, U <: Data, V <: Data](config: GemminiArrayConfig[T,
+           io.ext_mem.get.acc(i) <> bio.ext_mem.get
+         }
+ 
+-        acc_adders.io.in_sel(i) := bio.adder.valid
+-        acc_adders.io.ina(i) := bio.adder.op1
+-        acc_adders.io.inb(i) := bio.adder.op2
+-        bio.adder.sum := acc_adders.io.out
++        acc_adders match {
++          case Some(adders) =>
++            adders.io.in_sel(i) := bio.adder.valid
++            adders.io.ina(i) := bio.adder.op1
++            adders.io.inb(i) := bio.adder.op2
++            bio.adder.sum := adders.io.out
++          case None =>
++            bio.adder.sum := DontCare
++        }
+ 
+         val ex_read_req = io.acc.read_req(i)
+         val exread = ex_read_req.valid
+-- 
+2.34.1
+
