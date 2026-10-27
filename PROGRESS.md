@@ -70,6 +70,7 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 
 ## Session log
 ### 2026-10-26
+- M7.P first server attempt: the professor approved using the course tools. Job int8-stock-a was uploaded to the school server and started, but stopped at its input check because the Cadence and PDK folders are currently missing from the server's tools directory (only an unrelated course folder remains; the user confirmed it in their own session). They were present on 2026-10-22. The user is asking the department IT. The job stays in the user's home on the server; restart it with `nohup tcsh run.csh` in its folder. SSH lesson: logins started from Claude's terminal tool got empty or garbled passwords and a temporary block. The user runs small local login scripts instead (one password prompt, after a pause).
 - Site wording only (Portfolio 3022a26, 1c15633, pushed): multiplier table "Depth" -> "Critical path (gate levels)"; Oct 21 accuracy note now states the user's prior ranking (MXFP8 > INT8 > NVFP4 close behind > MXFP4) and that the INT8 gap closing on heavy tails was expected.
 ### 2026-10-22
 - Site/project sync audit (user asked): fixed 3 mismatches on the NVFP4 page (Portfolio 2454682, pushed): pill 115 -> 173 checks (pytest re-run: 173 passed); reference-model paragraph now says 115 was the Oct rebuild, 173 now; Oct 21 accuracy entry gained the FP32 fused-vs-separate caveat. Energy prep (M7.P0/P0b) deliberately not on the page yet: no results, and the school-server use awaits the professor's confirmation.
