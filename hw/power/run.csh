@@ -39,16 +39,20 @@ foreach f ( $LIB_PATH $GENUS $JOULES genus_int8.tcl joules_int8.tcl filelist.f a
   endif
 end
 
-# ---- 1. Genus
+# ---- 1. Genus (skipped when SKIP_GENUS is set and its outputs exist, e.g. to rerun only Joules)
+if ($?SKIP_GENUS && -e out/Gemmini_netlist.v) then
+echo "== Genus skipped (SKIP_GENUS set; reusing out/) `date`"
+else
 echo "== Genus start `date`"
 $GENUS -no_gui -batch -files genus_int8.tcl -log reports/genus >& reports/genus.out
 set rc = $status
 echo "== Genus exit $rc `date`"
 cp -f out/Gemmini.sdc reports/ >& /dev/null
-if ($rc != 0 || `grep -c "M7P-DONE" reports/genus.out` == 0 || `grep -c "M7P-FAIL" reports/genus.out` != 0) then
+if ($rc != 0 || `grep -c "^M7P-DONE" reports/genus.out` == 0 || `grep -c "^M7P-FAIL" reports/genus.out` != 0) then
   echo "Genus failed (exit $rc); see reports/genus.out" > FAILED
-  grep "M7P-FAIL\|^Error\|ERROR" reports/genus.out | head -20 >> FAILED
+  grep "^M7P-FAIL\|^Error\|ERROR" reports/genus.out | head -20 >> FAILED
   exit 1
+endif
 endif
 
 # ---- 2. Joules
@@ -56,9 +60,9 @@ echo "== Joules start `date`"
 $JOULES -batch -files joules_int8.tcl -log reports/joules >& reports/joules.out
 set rc = $status
 echo "== Joules exit $rc `date`"
-if ($rc != 0 || `grep -c "M7P-DONE" reports/joules.out` == 0 || `grep -c "M7P-FAIL" reports/joules.out` != 0) then
+if ($rc != 0 || `grep -c "^M7P-DONE" reports/joules.out` == 0 || `grep -c "^M7P-FAIL" reports/joules.out` != 0) then
   echo "Joules failed (exit $rc); Genus finished; see reports/joules.out" > FAILED
-  grep "M7P-FAIL\|^Error\|ERROR" reports/joules.out | head -20 >> FAILED
+  grep "^M7P-FAIL\|^Error\|ERROR" reports/joules.out | head -20 >> FAILED
   exit 1
 endif
 

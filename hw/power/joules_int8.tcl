@@ -38,22 +38,31 @@ if {$mode eq "db"} {
   read_db $OUT_DIR/Gemmini_genus.db                                                ;# VERIFY (Joules read_db of a Genus write_db database)
 } else {
   read_netlist $OUT_DIR/Gemmini_netlist.v                                          ;# VERIFY
-  elaborate $TOP                                                                   ;# VERIFY (netlist flow needs elaborate)
+  if {[catch {elaborate $TOP} err]} { puts "M7P-NOTE elaborate after read_netlist: $err" }  ;# may be unnecessary in the netlist flow
   read_sdc $OUT_DIR/Gemmini.sdc
 }
 
 # ---- activity: RTL VCD -> gate netlist, kernel window only.
-set stim_opts [list -file $VCD -format vcd -dut_instance $DUT]                      ;# VERIFY option names (-dut_instance, -format)
-if {$T0 ne "" && $T1 ne ""} { lappend stim_opts -start $T0 -end $T1 }               ;# VERIFY units (ns vs ps); default timescale of the VCD header (1ps)
-set rs_log [file join $RPT_DIR read_stimulus.log]
-if {[catch {eval read_stimulus $stim_opts} err]} { puts "M7P-FAIL read_stimulus: $err"; exit 3 }
+# The VCD root scope is TOP (Verilator), so Gemmini sits at TOP/TestDriver/.../gemmini. Try the likely spellings of the
+# DUT scope in turn and keep the first one that annotates signals; print which one worked.
+foreach c {rtlstim2gate_init rtlstim2gate} { if {![catch {$c} e]} { puts "M7P-RTLSTIM2GATE via $c"; break } else { puts "M7P-NOTE $c: $e" } }
+set slash [string map {. /} $DUT]
+set cands [list "TOP/$slash" "/TOP/$slash" $slash "TOP.[string map {/ .} $slash]"]
+set ok 0
+foreach cand $cands {
+  set stim_opts [list -file $VCD -format vcd -dut_instance $cand]                   ;# VERIFY option names (-dut_instance, -format)
+  if {$T0 ne "" && $T1 ne ""} { lappend stim_opts -start $T0 -end $T1 }             ;# VERIFY units (ps, the VCD timescale)
+  if {[catch {eval read_stimulus $stim_opts} err]} { puts "M7P-TRY dut=$cand failed: $err"; continue }
+  puts "M7P-TRY dut=$cand ok"; set ok 1; break
+}
+if {!$ok} { puts "M7P-FAIL read_stimulus: no DUT scope spelling matched"; exit 3 }
 puts "M7P-STIMULUS-READ"
 
 # ---- power
 compute_power -mode time_based                                                      ;# VERIFY (-mode time_based vs vectorbased|average)
-report_power -unit mW -outfile $RPT_DIR/power_total.rpt                              ;# VERIFY
-report_power -by_hierarchy -levels 4 -unit mW -outfile $RPT_DIR/power_by_hier_l4.rpt ;# VERIFY
-report_power -by_hierarchy -levels 2 -unit mW -outfile $RPT_DIR/power_by_hier_l2.rpt
+report_power -unit mW -out $RPT_DIR/power_total.rpt                              ;# VERIFY
+report_power -by_hierarchy -levels 4 -unit mW -out $RPT_DIR/power_by_hier_l4.rpt ;# VERIFY
+report_power -by_hierarchy -levels 2 -unit mW -out $RPT_DIR/power_by_hier_l2.rpt
 # Group breakdown. Instance paths under Gemmini (from the RTL tree, P0.1):
 #   mesh           : ex_controller/mesh/mesh                       (the 16x16 systolic array)
 #   spad_banks     : spad/spad_mems_0..3 (wrapper logic only; the SRAM macros are black boxes, no power here -> P2)
@@ -73,25 +82,13 @@ foreach {g insts} $groups {
     set safe [string map {/ _} $i]
     # one report per instance; the groups above are summed from these once the report format is known (first server run),
     # remembering to subtract ex_controller/mesh/mesh from ex_controller
-    if {[catch {report_power -hierarchy $i -unit mW -outfile $RPT_DIR/power_inst_${g}__${safe}.rpt} e1]} {      ;# VERIFY: option may be -root / -instance
-      catch {report_power -root $i -unit mW -outfile $RPT_DIR/power_inst_${g}__${safe}.rpt} e2
-      if {[info exists e2] && $e2 ne ""} { puts "M7P-WARN per-instance report failed for $i: $e1 / $e2" }
+    set f $RPT_DIR/power_inst_${g}__${safe}.rpt
+    if {[catch {report_power -inst $i -levels 1 -unit mW -out $f} e1] && [catch {report_power -inst $TOP/$i -levels 1 -unit mW -out $f} e2]} {
+      puts "M7P-WARN per-instance report failed for $i: $e1 / $e2"
     }
   }
 }
 
-# ---- annotation coverage (fraction of flops annotated). Try the documented report commands, keep whichever exists.
-set cov_done 0
-foreach cmd {{report_annotation -outfile} {report_activity_annotation -outfile} {report_activity -annotation -outfile}} {      ;# VERIFY all three
-  if {!$cov_done && ![catch {eval $cmd $RPT_DIR/annotation.rpt} e]} { set cov_done 1; puts "M7P-COVERAGE-REPORT via: $cmd" }
-}
-if {!$cov_done} { puts "M7P-WARN no annotation-report command worked; read the read_stimulus summary in joules.log (coverage lines) and fix the command name" }
-# independent count of annotated flops (fallback / cross-check): sequential instances with a non-zero toggle count
-catch {
-  set flops [get_db insts -if ".is_flop == true"]                                   ;# VERIFY attribute names
-  set ann 0
-  foreach fl $flops { if {[get_db $fl .activity_annotated] eq "true"} { incr ann } }
-  puts "M7P-FLOP-COVERAGE annotated=$ann total=[llength $flops]"
-}
+# ---- annotation coverage: read the 'Annotation Report' table that read_stimulus prints into joules.out
 puts "M7P-DONE"
 exit 0

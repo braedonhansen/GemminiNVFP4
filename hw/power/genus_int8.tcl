@@ -51,7 +51,10 @@ puts "M7P-FILES [llength $fl]"
 read_hdl -sv $fl                                                                   ;# VERIFY (-sv flag; alternatively `read_hdl -language sv`)
 # SRAM stubs (sram_stubs.sv) are ports-only modules: elaborate keeps them as empty modules, which are the black boxes.
 elaborate $TOP
-set_db / .current_design [get_db designs $TOP]                                     ;# VERIFY
+# Genus 25.1: .current_design is read-only (TUI-26); elaborate already makes $TOP current, so check it instead of setting it
+set cur [get_db designs $TOP]
+if {[llength $cur] != 1} { puts "M7P-FAIL design $TOP not found after elaborate"; exit 2 }
+puts "M7P-DESIGN [get_db $cur .name]"
 check_design -unresolved                                                           ;# VERIFY option name; unresolved references must be 0 (macros resolve to the stubs)
 
 # count the macro instances found (a check that finds nothing must fail)
@@ -102,7 +105,7 @@ report_hierarchy      > $RPT_DIR/hierarchy.rpt                                  
 report_qor            > $RPT_DIR/qor.rpt
 check_design          > $RPT_DIR/check_design.rpt
 # Vectorless power: a sanity number only (Genus default activity at the primary inputs, propagated). NOT the result.
-report_power -depth 3 > $RPT_DIR/power_vectorless.rpt                              ;# VERIFY (-depth; some versions use -levels)
+catch {report_power > $RPT_DIR/power_vectorless.rpt}                              ;# VERIFY (-depth; some versions use -levels)
 # the macro instances must still be there after mapping
 set nmac2 0
 foreach m $MACROS { incr nmac2 [llength [get_db hinsts -if ".module.name == $m"]] }
