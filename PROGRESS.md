@@ -69,6 +69,8 @@ Every delegated task follows [AGENT_LOOP.md](AGENT_LOOP.md): brief → step-by-s
 - 2026-10-10: Run Chipyard locally on WSL2, not a cloud pod (16 GB RAM is enough for Gemmini + Verilator if swap is set up).
 
 ## Session log
+### 2026-10-29
+- README + site (Portfolio 6d637e9, pushed): power marked in progress, no power numbers yet; site "Next" links the published repo. Pushed the user's M7.P commits 96f3898, 3803bcc with it (scanned: no server details).
 ### 2026-10-27
 - **M7.P first end-to-end power run DONE** (job int8-stock-a, stock INT8 Gemmini, OSU FreePDK45, 200 MHz, SRAMs black-boxed): Genus met timing (slack 0), 907,874 cells, 2.92 mm^2, ~2 h 40 min; Joules on the 64x64x512 INT8 kernel window (14,300 cycles; flop annotation 99.96%): **342 mW total, mesh 184.5 mW (54%), spad logic 99 mW; 24.45 uJ, 11.7 pJ/MAC (array 6.3)**. 85% internal (no clock gating), so flop count will dominate the format comparison. Flow fixes: Genus current_design, run.csh anchored marker greps + SKIP_GENUS, Joules netlist input / TOP/ scope / -out / rtlstim2gate. Results: docs/m7p/int8-stock-a/. The tools moved: one course server lost /tools (Cadence + PDK), so jobs run on its sibling (same shared home). Next: rerun with Nangate45 + OpenRAM SRAM models, then the other four designs.
 ### 2026-10-26
