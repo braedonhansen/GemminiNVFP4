@@ -15,6 +15,8 @@ if [ "$PARAMS" = tree ]; then
 else
   [ -s "$PARAMS" ] || { echo "FAIL: missing params header $PARAMS"; exit 2; }
   cp $RTS/include/*.h $T/inc/include/; cp $PARAMS $T/inc/include/gemmini_params.h
+  # the NVFP4 params header declares acc_t as uint128_t, which no header defines for the RISC-V target: add the typedef (acc_t is not used by the test)
+  if grep -q uint128_t $T/inc/include/gemmini_params.h; then awk '{print} /^#include <limits.h>/{print "typedef unsigned __int128 uint128_t;"}' $T/inc/include/gemmini_params.h > $T/p.h && mv $T/p.h $T/inc/include/gemmini_params.h; fi
   PRIV="-I$T/inc"; echo "params: $PARAMS ($(md5sum $PARAMS | cut -c1-12)) as a private include root"
 fi
 BENCH=$RTS/riscv-tests/benchmarks/common
