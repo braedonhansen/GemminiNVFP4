@@ -30,7 +30,9 @@ The design decisions and the alternatives considered are in [docs/M6-design-deba
 | M5 | Berkeley MX Gemmini brought up; its FP4 tests pass |
 | M6 | **NVFP4 in hardware.** Multi-tile matmuls (up to 96×32×256 and 64×64×512) are bit-exact against the reference model in both Spike and Verilator |
 | M7.A | Accuracy study comparing FP32, INT8, MXFP8, MXFP4 and NVFP4 ([results](docs/M7-accuracy-results.md)) |
-| M7.P | Energy and area comparison in FreePDK45 with Cadence Genus/Joules. The flow and libraries are prepared; nothing has run yet |
+| M7.P | **In progress.** Energy and area comparison in FreePDK45 with Cadence Genus/Joules. The flow now runs end to end on stock INT8 Gemmini as a smoke test ([docs/m7p/int8-stock-a](docs/m7p/int8-stock-a/README.md)) |
+
+> **Power numbers are not done yet.** The one run so far is a flow check on the stock INT8 baseline, and its SRAMs are black boxes. The energy comparison across the five designs is still in progress.
 
 At K = 1024 with Gaussian data, measured as hardware-level SQNR: FP32 130.5 dB, INT8 37.0, MXFP8 24.8, **NVFP4 16.8**, MXFP4 (OCP scaling) 15.6. In every condition tested, NVFP4 lands between MXFP4 and MXFP8.
 
