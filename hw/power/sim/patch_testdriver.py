@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""patch_testdriver.py <in TestDriver.v> <out TestDriver.v>: add the M7.P0 window control + Gemmini monitor.
+"""patch_testdriver.py <in TestDriver.v> <out TestDriver.v> [gemmini-instance-name, default gemmini]: add the M7.P0 window control + Gemmini monitor.
 Fails (exit 1) unless every anchor was found exactly once, so a changed upstream file cannot silently skip the patch."""
 import sys, re, os
 src = open(sys.argv[1]).read()
 mon = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "m7p_monitor.vh")).read()
-GEM = "testHarness.chiptop0.system.tile_prci_domain.element_reset_domain_rockettile.gemmini"
+GEM = "testHarness.chiptop0.system.tile_prci_domain.element_reset_domain_rockettile." + (sys.argv[3] if len(sys.argv) > 3 else "gemmini")   # M7.P1: the instance is named v in the MX trees
 def sub1(pat, rep, s):
     n = s.count(pat)
     if n != 1: sys.exit("anchor count %d != 1 for: %r" % (n, pat))

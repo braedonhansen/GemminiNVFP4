@@ -24,7 +24,7 @@
     if (!`M7P_GEM.reset) begin
       if (m7p_fire) begin
         m7p_nfire = m7p_nfire + 1;
-        if (m7p_nfire == 1 || `M7P_GEM.io_cmd_bits_inst_funct != m7p_pfunct) begin
+        if (m7p_nfire == 1 || !m7p_pbusy || `M7P_GEM.io_cmd_bits_inst_funct != m7p_pfunct) begin   // M7.P1: also the first command after an idle period, so the first command after the kernel marker is always listed
           if (m7p_nprint < 4000) $display("M7P FIRE cycle=%0d t_ns=%0.3f n=%0d funct=%0d", m7p_cyc, $realtime, m7p_nfire, `M7P_GEM.io_cmd_bits_inst_funct);
           m7p_nprint = m7p_nprint + 1;
         end
