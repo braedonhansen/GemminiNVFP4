@@ -202,7 +202,11 @@ catch {report_power > $RPT_DIR/power_vectorless.rpt}                            
 set nmac2 0
 foreach m $MACROS { incr nmac2 [llength [get_db hinsts -if ".module.name == $m"]] }
 puts "M7P-MACROS-AFTER-MAP $nmac2"
-if {$nmac2 != $EXPECT_MACRO_INSTS} { puts "M7P-FAIL macro instances after mapping: $nmac2" }
+if {$nmac2 != $EXPECT_MACRO_INSTS} {
+  # wrapper mode: the wrappers are ordinary logic, which syn_map uniquifies/renames, so a module-name count no longer
+  # finds them all (int8-stock-b: 2 of 6). The bank-cell count on the mapped netlist below is the check there.
+  if {$BANK_MODS ne ""} { puts "M7P-NOTE wrapper instances found by module name after mapping: $nmac2 (bank check decides)" } else { puts "M7P-FAIL macro instances after mapping: $nmac2" }
+}
 
 # ---------------------------------------------------------------- outputs for Joules / later steps
 write_hdl > [file join $OUT_DIR ${TOP}_netlist.v]                                  ;# VERIFY (`write_hdl` writes the mapped netlist; flag -mapped may be needed)
