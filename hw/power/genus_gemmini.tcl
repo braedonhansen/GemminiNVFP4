@@ -34,6 +34,9 @@ set EXPECT_MACRO_INSTS [envdef EXPECT_MACRO_INSTS 6]
 set BANK_MODS [envdef BANK_MODS ""]
 set EXPECT_BANKS [envdef EXPECT_BANKS ""]
 set MIN_FILES [envdef MIN_FILES 100]
+# M7.P2: CLOCK_GATING=1 lets Genus insert integrated clock-gating cells (Nangate45 CLKGATETST_X*) on enable-style registers,
+# as a production flow would. Default 0 reproduces the ungated M7.P1 results.
+set CLOCK_GATING [envdef CLOCK_GATING 0]
 file mkdir $OUT_DIR $RPT_DIR
 puts "M7P-PARAMS lib=$LIB_PATH clk_ns=$CLK_NS rtl=$RTL_DIR top=$TOP wrappers=$WRAPPER_DIR macros=$MACROS x$EXPECT_MACRO_INSTS banks=$EXPECT_BANKS"
 
@@ -108,6 +111,8 @@ catch {set_db / .hdl_verilog_defines {SYNTHESIS}}                               
 set_db / .information_level 6                                                      ;# more messages in the log
 # keep Gemmini's hierarchy so area/power can be reported per block (default auto_ungroup would flatten during syn_map)
 set_db / .auto_ungroup none                                                        ;# VERIFY (values none|both|area|delay)
+# no catch: if the attribute is rejected the run must stop now, not produce an ungated netlist hours later
+if {$CLOCK_GATING} { set_db / .lp_insert_clock_gating true; puts "M7P-CLOCK-GATING on" } else { puts "M7P-CLOCK-GATING off" }
 
 set libs {}
 foreach l $LIB_PATH { if {![file exists $l]} { puts "M7P-FAIL library file missing: $l"; exit 2 }; lappend libs $l }
@@ -183,6 +188,7 @@ report_clocks > $RPT_DIR/clocks.rpt                                             
 set t0 [clock seconds]
 syn_generic
 puts "M7P-SYN-GENERIC [expr {[clock seconds]-$t0}]s"
+if {$CLOCK_GATING} { catch {report_clock_gating > $RPT_DIR/clock_gating_generic.rpt} }   ;# early look, readable while syn_map runs
 syn_map
 puts "M7P-SYN-MAP [expr {[clock seconds]-$t0}]s"
 syn_opt
@@ -198,6 +204,12 @@ report_qor            > $RPT_DIR/qor.rpt
 check_design          > $RPT_DIR/check_design.rpt
 # Vectorless power: a sanity number only (Genus default activity at the primary inputs, propagated). NOT the result.
 catch {report_power > $RPT_DIR/power_vectorless.rpt}                              ;# Genus 25.1 report_power has no -depth
+if {$CLOCK_GATING} {
+  catch {report_clock_gating > $RPT_DIR/clock_gating.rpt}
+  set ncg [llength [lsearch -all -glob [get_db insts .base_cell.name] CLKGATE*]]   ;# same get_db insts walk as the bank check
+  puts "M7P-CLOCK-GATES $ncg"
+  if {$ncg == 0} { puts "M7P-FAIL clock gating requested but no CLKGATE cells in the mapped design" }
+}
 # the macro instances must still be there after mapping
 set nmac2 0
 foreach m $MACROS { incr nmac2 [llength [get_db hinsts -if ".module.name == $m"]] }
