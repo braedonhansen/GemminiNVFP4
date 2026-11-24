@@ -30,9 +30,19 @@ The design decisions and the alternatives considered are in [docs/M6-design-deba
 | M5 | Berkeley MX Gemmini brought up; its FP4 tests pass |
 | M6 | **NVFP4 in hardware.** Multi-tile matmuls (up to 96×32×256 and 64×64×512) are bit-exact against the reference model in both Spike and Verilator |
 | M7.A | Accuracy study comparing FP32, INT8, MXFP8, MXFP4 and NVFP4 ([results](docs/M7-accuracy-results.md)) |
-| M7.P | **In progress.** Energy and area comparison in FreePDK45 with Cadence Genus/Joules. The flow now runs end to end on stock INT8 Gemmini as a smoke test ([docs/m7p/int8-stock-a](docs/m7p/int8-stock-a/README.md)) |
+| M7.P | **Done.** Energy and area for all five designs in FreePDK45 (Nangate45 + OpenRAM SRAMs) with Cadence Genus/Joules, on a common 64×64×512 matmul ([jobs](docs/M7.P1-jobs.md)) |
 
-> **Power numbers are not done yet.** The one run so far is a flow check on the stock INT8 baseline, and its SRAMs are black boxes. The energy comparison across the five designs is still in progress.
+Energy per multiply-add for the whole Gemmini block, from synthesis at 5 ns with no clock gating:
+
+| Design | pJ/MAC | Multiply array pJ/MAC | Area |
+|---|---|---|---|
+| INT8 (stock) | 6.8 | 2.5 | 1.11 mm² |
+| MXFP4 | 11.0 | 3.7 | 2.50 mm² |
+| **NVFP4** | **14.4** | **2.2** | **2.29 mm²** |
+| MXFP8 | 33.1 | 15.5 | 3.24 mm² |
+| FP32 (stock, 4×4 array) | 63.2 | 23.8 | 0.71 mm² |
+
+NVFP4's array is the cheapest of the five. The whole block costs more than MXFP4 because of the FP32 accumulator and scale stage (3.6 against 1.2 pJ/MAC), 51% more cycles for the same work, and an unused MX requantizer (3.3 pJ/MAC). The write-up has the breakdown and caveats.
 
 At K = 1024 with Gaussian data, measured as hardware-level SQNR: FP32 130.5 dB, INT8 37.0, MXFP8 24.8, **NVFP4 16.8**, MXFP4 (OCP scaling) 15.6. In every condition tested, NVFP4 lands between MXFP4 and MXFP8.
 
